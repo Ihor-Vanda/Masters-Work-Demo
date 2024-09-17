@@ -1,0 +1,6 @@
+@Coursers_Manager_HostAddress = http://localhost:5004
+
+GET {{Courses_Manager_HostAddress}}/coursesmanager/
+Accept: application/json
+
+###

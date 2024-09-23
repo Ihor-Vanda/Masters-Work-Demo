@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "C:\\Users\\vanda\\Projects\\.NET\\masters_work\\Masters-Work-Demo\\Courses-Manager\\CoursesManager\\CoursesManager.csproj": {}
+    "C:\\Users\\vanda\\Projects\\.NET\\masters_work\\Masters-Work-Demo\\Student-Manager\\StudentManager\\StudentManager.csproj": {}
   },
   "projects": {
-    "C:\\Users\\vanda\\Projects\\.NET\\masters_work\\Masters-Work-Demo\\Courses-Manager\\CoursesManager\\CoursesManager.csproj": {
+    "C:\\Users\\vanda\\Projects\\.NET\\masters_work\\Masters-Work-Demo\\Student-Manager\\StudentManager\\StudentManager.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\vanda\\Projects\\.NET\\masters_work\\Masters-Work-Demo\\Courses-Manager\\CoursesManager\\CoursesManager.csproj",
-        "projectName": "CoursesManager",
-        "projectPath": "C:\\Users\\vanda\\Projects\\.NET\\masters_work\\Masters-Work-Demo\\Courses-Manager\\CoursesManager\\CoursesManager.csproj",
+        "projectUniqueName": "C:\\Users\\vanda\\Projects\\.NET\\masters_work\\Masters-Work-Demo\\Student-Manager\\StudentManager\\StudentManager.csproj",
+        "projectName": "StudentManager",
+        "projectPath": "C:\\Users\\vanda\\Projects\\.NET\\masters_work\\Masters-Work-Demo\\Student-Manager\\StudentManager\\StudentManager.csproj",
         "packagesPath": "C:\\Users\\vanda\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\vanda\\Projects\\.NET\\masters_work\\Masters-Work-Demo\\Courses-Manager\\CoursesManager\\obj\\",
+        "outputPath": "C:\\Users\\vanda\\Projects\\.NET\\masters_work\\Masters-Work-Demo\\Student-Manager\\StudentManager\\obj\\",
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "C:\\Users\\vanda\\AppData\\Roaming\\NuGet\\NuGet.Config"

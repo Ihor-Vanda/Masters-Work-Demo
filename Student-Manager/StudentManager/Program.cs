@@ -1,6 +1,16 @@
+using StudentManager.Repository;
+using StudentManager.Settings;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
+// Reading settings fo MongoDB from appsettings.json
+var mongoDBSettings = builder.Configuration.GetSection("MongoDBSettings").Get<MongoDBSettings>() ?? throw new InvalidOperationException("MongoDB settings are not configured properly.");
+
+builder.Services.AddSingleton(mongoDBSettings);
+
+builder.Services.AddSingleton<MongoDBRepository>();
+builder.Services.AddScoped<IRepository, StudentRepository>();
 
 builder.Services.AddControllers();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle

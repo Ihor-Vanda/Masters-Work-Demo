@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "Aw6BMvfNFdA=",
+  "dgSpecHash": "Y6ipqfmiHlE=",
   "success": true,
-  "projectFilePath": "C:\\Users\\vanda\\Projects\\.NET\\masters_work\\Masters-Work-Demo\\Student-Manager\\StudentManager\\StudentManager.csproj",
+  "projectFilePath": "c:\\Users\\vanda\\Projects\\.NET\\masters_work\\Masters-Work-Demo\\Student-Manager\\StudentManager\\StudentManager.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\vanda\\.nuget\\packages\\dnsclient\\1.4.0\\dnsclient.1.4.0.nupkg.sha512",
     "C:\\Users\\vanda\\.nuget\\packages\\microsoft.extensions.apidescription.server\\6.0.5\\microsoft.extensions.apidescription.server.6.0.5.nupkg.sha512",

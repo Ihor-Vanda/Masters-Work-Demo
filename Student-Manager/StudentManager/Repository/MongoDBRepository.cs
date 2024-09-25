@@ -57,7 +57,6 @@ public class MongoDBRepository : IRepository
         }
     }
 
-
     public async Task DeleteStudentAsync(string id)
     {
         await _students.DeleteOneAsync(student => student.Id == id);

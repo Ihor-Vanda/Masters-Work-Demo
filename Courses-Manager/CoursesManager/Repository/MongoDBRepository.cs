@@ -44,7 +44,6 @@ namespace CoursesManager.Repository
                 .Set(c => c.Title, updatedCourse.Title)
                 .Set(c => c.Description, updatedCourse.Description)
                 .Set(c => c.CourseCode, updatedCourse.CourseCode)
-                .Set(c => c.Duration, updatedCourse.Duration)
                 .Set(c => c.Language, updatedCourse.Language)
                 .Set(c => c.Status, updatedCourse.Status)
                 .Set(c => c.StartDate, updatedCourse.StartDate)
@@ -52,8 +51,7 @@ namespace CoursesManager.Repository
                 .Set(c => c.MaxStudents, updatedCourse.MaxStudents)
                 .Set(c => c.Instructors, updatedCourse.Instructors)
                 .Set(c => c.Students, updatedCourse.Students)
-                .Set(c => c.Tests, updatedCourse.Tests)
-                .Set(c => c.DiscussionForum, updatedCourse.DiscussionForum);
+                .Set(c => c.Tests, updatedCourse.Tests);
 
             var result = await _courses.UpdateOneAsync(
                 course => course.Id == id,

@@ -21,6 +21,8 @@ public class StudentManagerController : ControllerBase
     public async Task<ActionResult<IEnumerable<Student>>> GetStudents()
     {
         var students = await _studentRepository.GetAllStudents();
+
+        Console.WriteLine($"Procecced request to get all students from {HttpContext.Connection.RemoteIpAddress}");
         return Ok(students);
     }
 
@@ -35,6 +37,7 @@ public class StudentManagerController : ControllerBase
             return NotFound();
         }
 
+        Console.WriteLine($"Procecced request to get stuent {id} from {HttpContext.Connection.RemoteIpAddress}");
         return Ok(student);
     }
 
@@ -60,6 +63,7 @@ public class StudentManagerController : ControllerBase
 
             await _studentRepository.AddStudentAsync(student);
 
+            Console.WriteLine($"Procecced request to add student from {HttpContext.Connection.RemoteIpAddress}");
             return CreatedAtAction(nameof(GetStudentById), new { id = student.Id }, student);
         }
 
@@ -96,6 +100,7 @@ public class StudentManagerController : ControllerBase
 
             await _studentRepository.UpdateStudentAsync(id, student);
 
+            Console.WriteLine($"Procecced request to update stuent {id} from {HttpContext.Connection.RemoteIpAddress}");
             return NoContent();
         }
         return BadRequest("Date format is invalid it must to be yyyy-mm-dd");
@@ -104,26 +109,32 @@ public class StudentManagerController : ControllerBase
 
     //PUT: api/students/{id}/courses
     [HttpPut("{id}/courses")]
-    public async Task<ActionResult> AddCoursesToStudent(string id, [FromBody] List<string> courses)
+    public async Task<ActionResult> AddCoursesToStudent(string id, [FromBody] List<string> students)
     {
         if (string.IsNullOrWhiteSpace(id))
         {
             return BadRequest("Invalid request");
         }
 
-        var student = await _studentRepository.GetStudentByIdAsync(id);
-
-        if (student == null)
+        var studentsList = new List<Student>();
+        foreach (var student in students)
         {
-            return NotFound("The student doesn't found");
+            var _student = await _studentRepository.GetStudentByIdAsync(student);
+            if (_student == null)
+            {
+                return BadRequest("The student doesn't exist");
+            }
+            studentsList.Add(_student);
         }
 
-        courses ??= [];
-
-        student.Courses.AddRange(courses);
-        await _studentRepository.UpdateStudentAsync(id, student);
-
-        return Ok(student);
+        for (int i = 0; i < studentsList.Count; i++)
+        {
+            var std = studentsList[i];
+            std.Courses.Add(id);
+            await _studentRepository.UpdateStudentAsync(std.Id, std);
+        }
+        Console.WriteLine($"Procecced request adding course {id} to students {students.ToArray()} from {HttpContext.Connection.RemoteIpAddress}");
+        return Ok(students);
     }
 
     //DELETE: api/student/{id}

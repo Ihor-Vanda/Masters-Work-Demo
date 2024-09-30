@@ -1,3 +1,4 @@
+using CoursesManager.Clients;
 using CoursesManager.Repository;
 using CoursesManager.Settings;
 
@@ -18,6 +19,9 @@ builder.Services.AddSingleton(mongoDBSettings);
 // Реєстрація репозиторію і сервісу
 builder.Services.AddSingleton<MongoDBRepository>(); // Репозиторій для MongoDB
 builder.Services.AddScoped<IRepository, CourseRepository>(); // Репозиторій для курсів
+
+builder.Services.AddHttpClient<InstructorManagerClient>();
+builder.Services.AddHttpClient<StudentManagerClient>();
 
 builder.Services.AddControllers();
 

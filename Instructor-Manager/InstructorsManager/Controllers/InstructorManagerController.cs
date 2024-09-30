@@ -20,6 +20,7 @@ public class InstructorManagerController : ControllerBase
     public async Task<ActionResult<IEnumerable<Instructor>>> GetAllInstructors()
     {
         var instructors = await _instructorRepository.GetAllInstructors();
+        Console.WriteLine($"Procecced request to get all instructors from{HttpContext.Connection.RemoteIpAddress}");
         return Ok(instructors);
     }
 
@@ -34,6 +35,7 @@ public class InstructorManagerController : ControllerBase
             return NotFound();
         }
 
+        Console.WriteLine($"Procecced request to get all instructor {id} from{HttpContext.Connection.RemoteIpAddress}");
         return Ok(instructor);
     }
 
@@ -57,6 +59,7 @@ public class InstructorManagerController : ControllerBase
 
             await _instructorRepository.AddInstructor(instructor);
 
+            Console.WriteLine($"Procecced request to add instructors from{HttpContext.Connection.RemoteIpAddress}");
             return CreatedAtAction(nameof(GetInstructorById), new { id = instructor.Id }, instructor);
         }
 
@@ -93,6 +96,7 @@ public class InstructorManagerController : ControllerBase
 
             await _instructorRepository.UpdateInstructor(id, instructor);
 
+            Console.WriteLine($"Procecced request to update instructor {id} from{HttpContext.Connection.RemoteIpAddress}");
             return NoContent();
         }
 
@@ -101,25 +105,33 @@ public class InstructorManagerController : ControllerBase
 
     //PUT: api/instrctors/{id}/courses
     [HttpPut("{id}/courses")]
-    public async Task<ActionResult> AddCourseToInstructor(string id, [FromBody] List<string> courses)
+    public async Task<ActionResult> AddCourseToInstructors(string id, [FromBody] List<string> instructors)
     {
         if (string.IsNullOrWhiteSpace(id))
         {
             return BadRequest("Invalid request");
         }
 
-        var instructor = await _instructorRepository.GetInstructorById(id);
-        if (instructor == null)
+        var instructorsList = new List<Instructor>();
+        foreach (var instructor in instructors)
         {
-            return NotFound("The instructor not found");
+            var _instructor = await _instructorRepository.GetInstructorById(instructor);
+            if (_instructor == null)
+            {
+                return BadRequest("The instructor doesn't exist");
+            }
+            instructorsList.Add(_instructor);
         }
 
-        courses ??= [];
+        for (int i = 0; i < instructorsList.Count; i++)
+        {
+            var instr = instructorsList[i];
+            instr.Courses.Add(id);
+            await _instructorRepository.UpdateInstructor(instr.Id, instr);
+        }
 
-        instructor.Courses.AddRange(courses);
-        await _instructorRepository.UpdateInstructor(id, instructor);
-
-        return Ok(instructor);
+        Console.WriteLine($"Procecced request adding instructors {instructors} to course {id} from{HttpContext.Connection.RemoteIpAddress}");
+        return Ok(instructors);
     }
 
     //DELETE: api/instructors/{id}
@@ -139,6 +151,7 @@ public class InstructorManagerController : ControllerBase
 
         await _instructorRepository.DeleteInstructor(id);
 
+        Console.WriteLine($"Procecced request to delete instructors {id} from{HttpContext.Connection.RemoteIpAddress}");
         return NoContent();
     }
 }

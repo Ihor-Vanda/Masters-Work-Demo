@@ -1,3 +1,5 @@
+using System.Runtime.Serialization;
+using CoursesManager.Clients;
 using CoursesManager.DTO;
 using CoursesManager.Repository;
 using Microsoft.AspNetCore.Mvc;
@@ -10,9 +12,14 @@ public class CoursesManagerController : ControllerBase
 {
     private readonly IRepository _courseRepository;
 
-    public CoursesManagerController(IRepository courseService)
+    private readonly InstructorManagerClient _instructorManagerClient;
+    private readonly StudentManagerClient _studentManagerClient;
+
+    public CoursesManagerController(IRepository courseService, InstructorManagerClient instructorManagerClient, StudentManagerClient studentManagerClient)
     {
         _courseRepository = courseService;
+        _instructorManagerClient = instructorManagerClient;
+        _studentManagerClient = studentManagerClient;
     }
 
     // GET: api/courses
@@ -20,6 +27,8 @@ public class CoursesManagerController : ControllerBase
     public async Task<ActionResult<IEnumerable<Course>>> GetCourses()
     {
         var courses = await _courseRepository.GetAllCoursesAsync();
+
+        Console.WriteLine($"Procecced request to get all courses from{HttpContext.Connection.RemoteIpAddress}");
         return Ok(courses);
     }
 
@@ -34,6 +43,7 @@ public class CoursesManagerController : ControllerBase
             return NotFound();
         }
 
+        Console.WriteLine($"Procecced request to get course {id} from{HttpContext.Connection.RemoteIpAddress}");
         return Ok(course);
     }
 
@@ -46,25 +56,32 @@ public class CoursesManagerController : ControllerBase
             return BadRequest("Курс не може бути порожнім.");
         }
 
-        // Map CourseDto to Course
-        var course = new Course
+        if (DateTime.TryParseExact(courseDto.StartDate, "yyyy-MM-dd", null, System.Globalization.DateTimeStyles.None, out var startDate)
+        && DateTime.TryParseExact(courseDto.EndDate, "yyyy-MM-dd", null, System.Globalization.DateTimeStyles.None, out var endDate))
         {
-            Title = courseDto.Title,
-            Description = courseDto.Description,
-            CourseCode = courseDto.CourseCode,
-            Duration = courseDto.Duration,
-            Language = courseDto.Language,
-            Status = courseDto.Status,
-            StartDate = courseDto.StartDate,
-            EndDate = courseDto.EndDate,
-            MaxStudents = courseDto.MaxStudents,
-            DiscussionForum = courseDto.DiscussionForum,
-            // Instructors, Students, Tests are omitted
-        };
 
-        await _courseRepository.CreateCourseAsync(course);
 
-        return CreatedAtAction(nameof(GetCourseById), new { id = course.Id }, course);
+            // Map CourseDto to Course
+            var course = new Course
+            {
+                Title = courseDto.Title,
+                Description = courseDto.Description,
+                CourseCode = courseDto.CourseCode,
+                Language = courseDto.Language,
+                Status = courseDto.Status,
+                StartDate = startDate,
+                EndDate = endDate,
+                MaxStudents = courseDto.MaxStudents,
+                // Instructors, Students, Tests are omitted
+            };
+
+            await _courseRepository.CreateCourseAsync(course);
+
+            Console.WriteLine($"Procecced request to add course from{HttpContext.Connection.RemoteIpAddress}");
+            return CreatedAtAction(nameof(GetCourseById), new { id = course.Id }, course);
+        }
+
+        return BadRequest("Date format must be yyyy-MM-dd");
     }
 
     // PUT: api/courses/{id}
@@ -89,30 +106,35 @@ public class CoursesManagerController : ControllerBase
             return NotFound("Курс не знайдено.");
         }
 
-        var updatedCourse = new Course
+        if (DateTime.TryParseExact(updatedCourseDTO.StartDate, "yyyy-MM-dd", null, System.Globalization.DateTimeStyles.None, out var startDate)
+       && DateTime.TryParseExact(updatedCourseDTO.EndDate, "yyyy-MM-dd", null, System.Globalization.DateTimeStyles.None, out var endDate))
         {
-            Title = updatedCourseDTO.Title,
-            Description = updatedCourseDTO.Description,
-            CourseCode = updatedCourseDTO.CourseCode,
-            Duration = updatedCourseDTO.Duration,
-            Language = updatedCourseDTO.Language,
-            Status = updatedCourseDTO.Status,
-            StartDate = updatedCourseDTO.StartDate,
-            EndDate = updatedCourseDTO.EndDate,
-            MaxStudents = updatedCourseDTO.MaxStudents,
-            DiscussionForum = updatedCourseDTO.DiscussionForum,
-            // Instructors, Students, Tests are omitted
-        };
 
-        // Оновлюємо курс у базі даних
-        await _courseRepository.UpdateCourseAsync(id, updatedCourse);
+            var updatedCourse = new Course
+            {
+                Title = updatedCourseDTO.Title,
+                Description = updatedCourseDTO.Description,
+                CourseCode = updatedCourseDTO.CourseCode,
+                Language = updatedCourseDTO.Language,
+                Status = updatedCourseDTO.Status,
+                StartDate = startDate,
+                EndDate = endDate,
+                MaxStudents = updatedCourseDTO.MaxStudents,
+            };
 
-        return NoContent(); // Повертає статус 204 No Content
+            // Оновлюємо курс у базі даних
+            await _courseRepository.UpdateCourseAsync(id, updatedCourse);
+
+            Console.WriteLine($"Procecced request to update course {id} from{HttpContext.Connection.RemoteIpAddress}");
+            return NoContent(); // Повертає статус 204 No Content
+        }
+
+        return BadRequest("Date format must be yyyy-MM-dd");
     }
 
     // PUT: api/courses/{id}/students
     [HttpPut("{id}/students")]
-    public async Task<IActionResult> AddStudentsToCourse(string id, [FromBody] List<int> students)
+    public async Task<IActionResult> AddStudentsToCourse(string id, [FromBody] List<string> students)
     {
         if (string.IsNullOrWhiteSpace(id))
         {
@@ -125,18 +147,20 @@ public class CoursesManagerController : ControllerBase
             return NotFound("Курс не знайдено.");
         }
 
-        students ??= [];
+        if (!_studentManagerClient.ModifyStudentToCourse(id, students).IsCompletedSuccessfully)
+        {
+            course.Students.AddRange(students);
+            await _courseRepository.UpdateCourseAsync(id, course);
 
-        // Add students to the existing course
-        course.Students.AddRange(students);
-        await _courseRepository.UpdateCourseAsync(id, course);
+            return Ok(course);
+        }
 
-        return Ok(course);
+        return BadRequest("Invalid students id");
     }
 
     // PUT: api/courses/{id}/instructors
     [HttpPut("{id}/instructors")]
-    public async Task<IActionResult> AddInstructorsToCourse(string id, [FromBody] List<int> instructors)
+    public async Task<IActionResult> AddInstructorsToCourse(string id, [FromBody] List<string> instructors)
     {
         if (string.IsNullOrWhiteSpace(id))
         {
@@ -149,17 +173,20 @@ public class CoursesManagerController : ControllerBase
             return NotFound("Курс не знайдено.");
         }
 
-        course.Instructors ??= [];
+        if (!_instructorManagerClient.ModifyInstructorToCourse(id, instructors).IsCompletedSuccessfully)
+        {
+            course.Instructors.AddRange(instructors);
+            await _courseRepository.UpdateCourseAsync(id, course);
 
-        course.Instructors.AddRange(instructors);
-        await _courseRepository.UpdateCourseAsync(id, course);
+            return Ok(course);
+        }
 
-        return Ok(course);
+        return BadRequest("Invalid instructors id");
     }
 
     // PUT: api/courses/{id}/tests
     [HttpPut("{id}/tests")]
-    public async Task<IActionResult> AddTestsToCourse(string id, [FromBody] List<int> tests)
+    public async Task<IActionResult> AddTestsToCourse(string id, [FromBody] List<string> tests)
     {
         if (string.IsNullOrWhiteSpace(id))
         {
@@ -199,6 +226,7 @@ public class CoursesManagerController : ControllerBase
         // Видаляємо курс з бази даних
         await _courseRepository.DeleteCourseAsync(id);
 
+        Console.WriteLine($"Procecced request to delete course {id} from{HttpContext.Connection.RemoteIpAddress}");
         return NoContent(); // Повертає статус 204 No Content
     }
 

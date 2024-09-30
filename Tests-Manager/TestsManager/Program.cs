@@ -1,5 +1,6 @@
-using StudentManager.Repository;
-using StudentManager.Settings;
+using TestsManager.Clients;
+using TestsManager.Repository;
+using TestsManager.Settings;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -10,7 +11,9 @@ var mongoDBSettings = builder.Configuration.GetSection("MongoDBSettings").Get<Mo
 builder.Services.AddSingleton(mongoDBSettings);
 
 builder.Services.AddSingleton<MongoDBRepository>();
-builder.Services.AddScoped<IRepository, StudentRepository>();
+builder.Services.AddScoped<IRepository, TestsRepository>();
+
+builder.Services.AddHttpClient<CourseServiceClient>();
 
 builder.Services.AddControllers();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle

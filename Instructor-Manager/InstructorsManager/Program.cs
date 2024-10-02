@@ -1,3 +1,4 @@
+using InstructorsManager.Clients;
 using InstructorsManager.Repository;
 using InstructorsManager.Settings;
 
@@ -11,6 +12,8 @@ builder.Services.AddSingleton(mongoDBSettings);
 
 builder.Services.AddSingleton<MongoDBRepository>();
 builder.Services.AddScoped<IRepository, InstructorRepository>();
+
+builder.Services.AddHttpClient<CourseServiceClient>();
 
 builder.Services.AddControllers();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle

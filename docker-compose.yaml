@@ -1,4 +1,3 @@
-version: "3.8"
 services:
   mongodb:
     image: mongo:latest
@@ -10,6 +9,63 @@ services:
     environment:
       MONGO_INITDB_ROOT_USERNAME: admin
       MONGO_INITDB_ROOT_PASSWORD: password
+
+  courses-manager:
+    image: coursesmanager:latest
+    build:
+      context: ./Courses-Manager
+      dockerfile: Dockerfile
+    container_name: courses_manager_service
+    depends_on:
+      - mongodb
+    environment:
+      MongoDBSettings__ConnectionString: "mongodb://admin:password@mongodb:27017"
+      MongoDBSettings__DatabaseName: "CoursesDB"
+    ports:
+      - "5001:8080"
+
+  students-manager:
+    image: studentsmanager:latest
+    build:
+      context: ./Student-Manager
+      dockerfile: Dockerfile
+    container_name: students_manager_service
+    depends_on:
+      - mongodb
+    environment:
+      MongoDBSettings__ConnectionString: "mongodb://admin:password@mongodb:27017"
+      MongoDBSettings__DatabaseName: "StudentsDB"
+    ports:
+      - "5002:8080"
+
+  instructors-manager:
+    image: instructorsmanager:latest
+    build:
+      context: ./Instructor-Manager
+      dockerfile: Dockerfile
+    container_name: instructors_manager_service
+    depends_on:
+      - mongodb
+    environment:
+      MongoDBSettings__ConnectionString: "mongodb://admin:password@mongodb:27017"
+      MongoDBSettings__DatabaseName: "InstructorsDB"
+    ports:
+      - "5003:8080"
+
+  tests-manager:
+    image: testsmanager:latest
+    build:
+      context: ./Tests-Manager
+      dockerfile: Dockerfile
+    container_name: tests_manager_service
+    depends_on:
+      - mongodb
+      - courses-manager
+    environment:
+      MongoDBSettings__ConnectionString: "mongodb://admin:password@mongodb:27017"
+      MongoDBSettings__DatabaseName: "TestsDB"
+    ports:
+      - "5004:8080"
 
 volumes:
   mongo-data:

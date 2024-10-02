@@ -1,4 +1,4 @@
-namespace TestsManager.Clients;
+namespace StudentManager.Clients;
 
 public class CourseServiceClient
 {

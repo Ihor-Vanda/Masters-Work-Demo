@@ -11,7 +11,7 @@ public class StudentManagerClient
         _httpClient = httpClient;
     }
 
-    public async Task<HttpStatusCode> ModifyStudentToCourse(string courseId, List<string> requestBody)
+    public async Task<HttpStatusCode> AddStudentToCourse(string courseId, List<string> requestBody)
     {
         // Сериалізація тіла запиту у формат JSON
         var jsonContent = new StringContent(
@@ -19,7 +19,15 @@ public class StudentManagerClient
             System.Text.Encoding.UTF8,
             "application/json");
 
-        var response = await _httpClient.PutAsync($"http://localhost:5164/StudentManager/{courseId}/courses", jsonContent);
+        var response = await _httpClient.PutAsync($"http://localhost:5002/StudentManager/{courseId}/courses", jsonContent);
+
+        Console.WriteLine(response.StatusCode);
+        return response.StatusCode;
+    }
+
+    public async Task<HttpStatusCode> DeleteStudentFromCourse(string courseId)
+    {
+        var response = await _httpClient.PutAsync($"http://localhost:5002/StudentManager/courses/{courseId}", null);
 
         Console.WriteLine(response.StatusCode);
         return response.StatusCode;

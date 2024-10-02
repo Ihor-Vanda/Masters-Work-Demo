@@ -95,6 +95,33 @@ public class TestsManagerController : ControllerBase
         return NoContent();
     }
 
+    [HttpPut("{id}/courses")]
+    public async Task<ActionResult> ChageCourseToTest(string id, [FromBody] string test)
+    {
+        if (string.IsNullOrWhiteSpace(id) || string.IsNullOrWhiteSpace(test))
+        {
+            return BadRequest("Invalid request");
+        }
+
+        var _test = await _testRepository.GetTestById(test);
+        if (_test == null)
+        {
+            return BadRequest("The test doesn't exist");
+        }
+
+        var courseExists = await _courseServiceClient.CheckCourseExists(id);
+        if (!courseExists)
+        {
+            return BadRequest($"Course with id {id} does not exist.");
+        }
+
+        _test.ReletedCourseId = id;
+        await _testRepository.UpdateTest(test, _test);
+
+        Console.WriteLine($"Procecced request adding course {id} to test {_test} from {HttpContext.Connection.RemoteIpAddress}");
+        return Ok(_test);
+    }
+
     //DELETE: api/test/{id}
     [HttpDelete("{id}")]
     public async Task<ActionResult> DeleteTest(string id)

@@ -14,12 +14,18 @@ public class CoursesManagerController : ControllerBase
 
     private readonly InstructorManagerClient _instructorManagerClient;
     private readonly StudentManagerClient _studentManagerClient;
+    private readonly TestManagerClient _testManagerClient;
 
-    public CoursesManagerController(IRepository courseService, InstructorManagerClient instructorManagerClient, StudentManagerClient studentManagerClient)
+    public CoursesManagerController(
+        IRepository courseService,
+        InstructorManagerClient instructorManagerClient,
+        StudentManagerClient studentManagerClient,
+        TestManagerClient testManagerClient)
     {
         _courseRepository = courseService;
         _instructorManagerClient = instructorManagerClient;
         _studentManagerClient = studentManagerClient;
+        _testManagerClient = testManagerClient;
     }
 
     // GET: api/courses
@@ -147,7 +153,7 @@ public class CoursesManagerController : ControllerBase
             return NotFound("Курс не знайдено.");
         }
 
-        if (!_studentManagerClient.ModifyStudentToCourse(id, students).IsCompletedSuccessfully)
+        if (!_studentManagerClient.AddStudentToCourse(id, students).IsCompletedSuccessfully)
         {
             course.Students.AddRange(students);
             await _courseRepository.UpdateCourseAsync(id, course);
@@ -223,10 +229,14 @@ public class CoursesManagerController : ControllerBase
             return NotFound("Курс не знайдено.");
         }
 
+        await _studentManagerClient.DeleteStudentFromCourse(id);
+        await _instructorManagerClient.DeleteInstructorFromCourse(id);
+        await _testManagerClient.DeleteTestFromCourse(id);
+
         // Видаляємо курс з бази даних
         await _courseRepository.DeleteCourseAsync(id);
 
-        Console.WriteLine($"Procecced request to delete course {id} from{HttpContext.Connection.RemoteIpAddress}");
+        Console.WriteLine($"Procecced request to delete course {id} from {HttpContext.Connection.RemoteIpAddress}");
         return NoContent(); // Повертає статус 204 No Content
     }
 

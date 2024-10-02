@@ -1,3 +1,4 @@
+using InstructorsManager.Clients;
 using InstructorsManager.DTO;
 using InstructorsManager.Repository;
 using Microsoft.AspNetCore.Mvc;
@@ -10,9 +11,12 @@ public class InstructorManagerController : ControllerBase
 {
     private readonly IRepository _instructorRepository;
 
-    public InstructorManagerController(IRepository instructorRepository)
+    private readonly CourseServiceClient _courseServiceClient;
+
+    public InstructorManagerController(IRepository instructorRepository, CourseServiceClient courseServiceClient)
     {
         _instructorRepository = instructorRepository;
+        _courseServiceClient = courseServiceClient;
     }
 
     //GET: api/instructors
@@ -112,6 +116,12 @@ public class InstructorManagerController : ControllerBase
             return BadRequest("Invalid request");
         }
 
+        var courseExists = await _courseServiceClient.CheckCourseExists(id);
+        if (!courseExists)
+        {
+            return BadRequest($"Course with id {id} does not exist.");
+        }
+
         var instructorsList = new List<Instructor>();
         foreach (var instructor in instructors)
         {
@@ -126,12 +136,42 @@ public class InstructorManagerController : ControllerBase
         for (int i = 0; i < instructorsList.Count; i++)
         {
             var instr = instructorsList[i];
-            instr.Courses.Add(id);
-            await _instructorRepository.UpdateInstructor(instr.Id, instr);
+            if (!instr.Courses.Contains(id) && instr.Id != null)
+            {
+                instr.Courses.Add(id);
+                await _instructorRepository.UpdateInstructor(instr.Id, instr);
+            }
         }
 
         Console.WriteLine($"Procecced request adding instructors {instructors} to course {id} from{HttpContext.Connection.RemoteIpAddress}");
         return Ok(instructors);
+    }
+
+    //PUT: api/instructors/courses/{id}
+    [HttpPut("/courses/{courseId}")]
+    public async Task<ActionResult> DeleteCourseFromStudent(string courseId)
+    {
+        if (string.IsNullOrWhiteSpace(courseId))
+        {
+            return BadRequest("Invalid request");
+        }
+
+        var courseExists = await _courseServiceClient.CheckCourseExists(courseId);
+        if (!courseExists)
+        {
+            return BadRequest($"Course with id {courseId} does not exist.");
+        }
+
+        var instructors = await _instructorRepository.GetAllInstructors();
+        var instrList = instructors.FindAll(s => s.Courses.Contains(courseId));
+
+        for (int i = 0; i < instrList.Count; i++)
+        {
+            instrList[i].Courses.Remove(courseId);
+            await _instructorRepository.UpdateInstructor(instrList[i].Id, instrList[i]);
+        }
+        Console.WriteLine($"Procecced request adding course {courseId} to students {instrList.ToList()} from {HttpContext.Connection.RemoteIpAddress}");
+        return Ok(instrList);
     }
 
     //DELETE: api/instructors/{id}

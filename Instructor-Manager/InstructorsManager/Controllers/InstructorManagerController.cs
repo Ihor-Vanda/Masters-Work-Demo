@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace InstructorsManager.Controllers;
 
 [ApiController]
-[Route("[controller]")]
+[Route("instructors")]
 public class InstructorManagerController : ControllerBase
 {
     private readonly IRepository _instructorRepository;
@@ -19,7 +19,7 @@ public class InstructorManagerController : ControllerBase
         _courseServiceClient = courseServiceClient;
     }
 
-    //GET: api/instructors
+    //GET: instructors
     [HttpGet]
     public async Task<ActionResult<IEnumerable<Instructor>>> GetAllInstructors()
     {
@@ -28,7 +28,7 @@ public class InstructorManagerController : ControllerBase
         return Ok(instructors);
     }
 
-    //GET: api/instructors/{id}
+    //GET: instructors/{id}
     [HttpGet("{id}")]
     public async Task<ActionResult<Instructor>> GetInstructorById(string id)
     {
@@ -43,7 +43,7 @@ public class InstructorManagerController : ControllerBase
         return Ok(instructor);
     }
 
-    //POST: api/instructors
+    //POST: instructors
     [HttpPost]
     public async Task<ActionResult> AddInstructor([FromBody] InstructorDTO instructorDTO)
     {
@@ -70,7 +70,7 @@ public class InstructorManagerController : ControllerBase
         return BadRequest("Date format is incorrect");
     }
 
-    //PUT: api/instrictors
+    //PUT: instructors
     [HttpPut("{id}")]
     public async Task<ActionResult> UpdateInstructor(string id, [FromBody] InstructorDTO instructorDTO)
     {
@@ -107,7 +107,7 @@ public class InstructorManagerController : ControllerBase
         return BadRequest("Date format is invalid it must to be yyyy-mm-dd");
     }
 
-    //PUT: api/instrctors/{id}/courses
+    //PUT: instructors/{id}/courses
     [HttpPut("{id}/courses")]
     public async Task<ActionResult> AddCourseToInstructors(string id, [FromBody] List<string> instructors)
     {
@@ -147,7 +147,7 @@ public class InstructorManagerController : ControllerBase
         return Ok(instructors);
     }
 
-    //PUT: api/instructors/courses/{id}
+    //PUT: instructors/courses/{id}
     [HttpPut("/courses/{courseId}")]
     public async Task<ActionResult> DeleteCourseFromStudent(string courseId)
     {
@@ -174,7 +174,7 @@ public class InstructorManagerController : ControllerBase
         return Ok(instrList);
     }
 
-    //DELETE: api/instructors/{id}
+    //DELETE: instructors/{id}
     [HttpDelete("{id}")]
     public async Task<ActionResult> DeleteInstructor(string id)
     {
@@ -183,10 +183,15 @@ public class InstructorManagerController : ControllerBase
             return BadRequest("Invalid id");
         }
 
-        var instructor = _instructorRepository.GetInstructorById(id);
+        var instructor = await _instructorRepository.GetInstructorById(id);
         if (instructor == null)
         {
             return NotFound("The instructor not foud");
+        }
+
+        if (instructor.Courses.Count > 0)
+        {
+            await _courseServiceClient.DeleteInstructorFromCourses(id, instructor.Courses);
         }
 
         await _instructorRepository.DeleteInstructor(id);

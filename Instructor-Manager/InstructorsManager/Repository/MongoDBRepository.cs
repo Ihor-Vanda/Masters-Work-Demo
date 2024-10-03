@@ -19,7 +19,7 @@ public class MongoDBRepository : IRepository
         return await _instructors.Find(instructor => true).ToListAsync();
     }
 
-    public async Task<Instructor> GetInstructorById(string id)
+    public async Task<Instructor?> GetInstructorById(string id)
     {
         return await _instructors.Find(instructor => instructor.Id == id).FirstOrDefaultAsync();
     }

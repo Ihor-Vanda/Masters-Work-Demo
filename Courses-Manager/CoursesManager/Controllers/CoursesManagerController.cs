@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace CoursesManager.Controllers;
 
 [ApiController]
-[Route("[controller]")]
+[Route("/courses")]
 public class CoursesManagerController : ControllerBase
 {
     private readonly IRepository _courseRepository;
@@ -28,7 +28,7 @@ public class CoursesManagerController : ControllerBase
         _testManagerClient = testManagerClient;
     }
 
-    // GET: api/courses
+    // GET: /courses
     [HttpGet]
     public async Task<ActionResult<IEnumerable<Course>>> GetCourses()
     {
@@ -38,7 +38,7 @@ public class CoursesManagerController : ControllerBase
         return Ok(courses);
     }
 
-    // GET: api/courses/{id}
+    // GET: courses/{id}
     [HttpGet("{id}")]
     public async Task<ActionResult<Course>> GetCourseById(string id)
     {
@@ -53,7 +53,7 @@ public class CoursesManagerController : ControllerBase
         return Ok(course);
     }
 
-    // POST: api/courses
+    // POST: courses
     [HttpPost]
     public async Task<IActionResult> CreateCourse([FromBody] CourseDto courseDto)
     {
@@ -90,7 +90,7 @@ public class CoursesManagerController : ControllerBase
         return BadRequest("Date format must be yyyy-MM-dd");
     }
 
-    // PUT: api/courses/{id}
+    // PUT: courses/{id}
     [HttpPut("{id}")]
     public async Task<IActionResult> UpdateCourse(string id, [FromBody] CourseDto updatedCourseDTO)
     {
@@ -138,8 +138,8 @@ public class CoursesManagerController : ControllerBase
         return BadRequest("Date format must be yyyy-MM-dd");
     }
 
-    // PUT: api/courses/{id}/students
-    [HttpPut("{id}/students")]
+    // PUT: courses/students/{id}
+    [HttpPut("/students/{id}")]
     public async Task<IActionResult> AddStudentsToCourse(string id, [FromBody] List<string> students)
     {
         if (string.IsNullOrWhiteSpace(id))
@@ -164,9 +164,37 @@ public class CoursesManagerController : ControllerBase
         return BadRequest("Invalid students id");
     }
 
-    // PUT: api/courses/{id}/instructors
-    [HttpPut("{id}/instructors")]
-    public async Task<IActionResult> AddInstructorsToCourse(string id, [FromBody] List<string> instructors)
+    [HttpDelete("/students/{id}")]
+    public async Task<ActionResult> DeleteStudentFromCourses(string id, [FromBody] List<string> courses)
+    {
+
+        if (string.IsNullOrWhiteSpace(id))
+        {
+            return BadRequest("Invalid id");
+        }
+
+        var coursesList = new List<Course>();
+        foreach (var course in courses)
+        {
+            var c = await _courseRepository.GetCourseByIdAsync(course);
+            if (c != null)
+            {
+                coursesList.Add(c);
+            }
+        }
+
+        for (int i = 0; i < coursesList.Count; i++)
+        {
+            coursesList[i].Students.Remove(id);
+            await _courseRepository.UpdateCourseAsync(coursesList[i].Id, coursesList[i]);
+        }
+
+        return Ok(id);
+    }
+
+    // PUT: courses/instructors/{id}
+    [HttpPut("/instructors/{id}")]
+    public async Task<ActionResult> AddInstructorsToCourse(string id, [FromBody] List<string> instructors)
     {
         if (string.IsNullOrWhiteSpace(id))
         {
@@ -190,8 +218,36 @@ public class CoursesManagerController : ControllerBase
         return BadRequest("Invalid instructors id");
     }
 
-    // PUT: api/courses/{id}/tests
-    [HttpPut("{id}/tests")]
+    [HttpDelete("/instructors/{id}")]
+    public async Task<ActionResult> DeleteInstructorFromCourses(string id, [FromBody] List<string> courses)
+    {
+
+        if (string.IsNullOrWhiteSpace(id))
+        {
+            return BadRequest("Invalid id");
+        }
+
+        var coursesList = new List<Course>();
+        foreach (var course in courses)
+        {
+            var c = await _courseRepository.GetCourseByIdAsync(course);
+            if (c != null)
+            {
+                coursesList.Add(c);
+            }
+        }
+
+        for (int i = 0; i < coursesList.Count; i++)
+        {
+            coursesList[i].Instructors.Remove(id);
+            await _courseRepository.UpdateCourseAsync(coursesList[i].Id, coursesList[i]);
+        }
+
+        return Ok(id);
+    }
+
+    // PUT: courses/tests/{id}
+    [HttpPut("/tests/{id}")]
     public async Task<IActionResult> AddTestsToCourse(string id, [FromBody] List<string> tests)
     {
         if (string.IsNullOrWhiteSpace(id))
@@ -212,6 +268,28 @@ public class CoursesManagerController : ControllerBase
 
         return Ok(course);
     }
+
+    [HttpDelete("/tests/{id}")]
+    public async Task<ActionResult> DeleteTestFromCourses(string id, [FromBody] string course)
+    {
+
+        if (string.IsNullOrWhiteSpace(id) || string.IsNullOrWhiteSpace(course))
+        {
+            return BadRequest("Invalid id");
+        }
+
+        var c = await _courseRepository.GetCourseByIdAsync(course);
+        if (c == null)
+        {
+            return BadRequest("Course id is invalid");
+        }
+
+        c.Tests.Remove(id);
+        await _courseRepository.UpdateCourseAsync(course, c);
+
+        return Ok(id);
+    }
+
 
     // DELETE: api/courses/{id}
     [HttpDelete("{id}")]

@@ -891,11 +891,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\Users\\vanda\\Projects\\.NET\\masters_work\\Masters-Work-Demo\\Student-Manager\\StudentManager\\StudentManager.csproj",
+      "projectUniqueName": "c:\\Users\\vanda\\Projects\\.NET\\masters_work\\Masters-Work-Demo\\Student-Manager\\StudentManager\\StudentManager.csproj",
       "projectName": "StudentManager",
-      "projectPath": "C:\\Users\\vanda\\Projects\\.NET\\masters_work\\Masters-Work-Demo\\Student-Manager\\StudentManager\\StudentManager.csproj",
+      "projectPath": "c:\\Users\\vanda\\Projects\\.NET\\masters_work\\Masters-Work-Demo\\Student-Manager\\StudentManager\\StudentManager.csproj",
       "packagesPath": "C:\\Users\\vanda\\.nuget\\packages\\",
-      "outputPath": "C:\\Users\\vanda\\Projects\\.NET\\masters_work\\Masters-Work-Demo\\Student-Manager\\StudentManager\\obj\\",
+      "outputPath": "c:\\Users\\vanda\\Projects\\.NET\\masters_work\\Masters-Work-Demo\\Student-Manager\\StudentManager\\obj\\",
       "projectStyle": "PackageReference",
       "configFilePaths": [
         "C:\\Users\\vanda\\AppData\\Roaming\\NuGet\\NuGet.Config"

@@ -14,7 +14,7 @@ public class InstructorRepository : IRepository
         return await _mongoDBRepository.GetAllInstructors();
     }
 
-    public async Task<Instructor> GetInstructorById(string id)
+    public async Task<Instructor?> GetInstructorById(string id)
     {
         return await _mongoDBRepository.GetInstructorById(id);
     }

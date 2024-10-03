@@ -6,7 +6,7 @@ using TestsManager.Repository;
 namespace TestsManager.Controllers;
 
 [ApiController]
-[Route("[controller]")]
+[Route("tests")]
 public class TestsManagerController : ControllerBase
 {
     private readonly IRepository _testRepository;
@@ -18,15 +18,17 @@ public class TestsManagerController : ControllerBase
         _courseServiceClient = courseServiceClient;
     }
 
-    //GET: api/test
+    //GET: tests
     [HttpGet]
     public async Task<ActionResult<List<Test>>> GetAllTest()
     {
         var test = await _testRepository.GetAllTest();
+        Console.WriteLine($"Procecced request get all tests from {HttpContext.Connection.RemoteIpAddress}");
+
         return Ok(test);
     }
 
-    //GET: api/test/{id}
+    //GET: tests/{id}
     [HttpGet("{id}")]
     public async Task<ActionResult<Test>> GetTest(string id)
     {
@@ -37,10 +39,11 @@ public class TestsManagerController : ControllerBase
             return NotFound();
         }
 
+        Console.WriteLine($"Procecced request get test {id} from {HttpContext.Connection.RemoteIpAddress}");
         return Ok(test);
     }
 
-    //POST: api/test
+    //POST: tests
     [HttpPost]
     public async Task<ActionResult> AddTest([FromBody] TestDTO testDTO)
     {
@@ -61,11 +64,12 @@ public class TestsManagerController : ControllerBase
         test.Questions = testDTO.Questions;
 
         await _testRepository.AddTest(test);
+        Console.WriteLine($"Procecced request add test from {HttpContext.Connection.RemoteIpAddress}");
 
         return CreatedAtAction(nameof(GetTest), new { id = test.Id }, test);
     }
 
-    //PUT: api/test/{id}
+    //PUT: tests/{id}
     [HttpPut("{id}")]
     public async Task<ActionResult> UpdateTest(string id, [FromBody] TestDTO testDTO)
     {
@@ -91,6 +95,7 @@ public class TestsManagerController : ControllerBase
         test.Questions = testDTO.Questions;
 
         await _testRepository.UpdateTest(id, test);
+        Console.WriteLine($"Procecced request modify test {id} from {HttpContext.Connection.RemoteIpAddress}");
 
         return NoContent();
     }
@@ -122,7 +127,7 @@ public class TestsManagerController : ControllerBase
         return Ok(_test);
     }
 
-    //DELETE: api/test/{id}
+    //DELETE: tests/{id}
     [HttpDelete("{id}")]
     public async Task<ActionResult> DeleteTest(string id)
     {
@@ -137,7 +142,14 @@ public class TestsManagerController : ControllerBase
             return NotFound();
         }
 
+        if (test.ReletedCourseId != null)
+        {
+            await _courseServiceClient.DeleteTestFromCourses(id, test.ReletedCourseId);
+        }
+
         await _testRepository.DeleteTest(id);
+        Console.WriteLine($"Procecced request deleting test {id} from {HttpContext.Connection.RemoteIpAddress}");
+
 
         return NoContent();
     }

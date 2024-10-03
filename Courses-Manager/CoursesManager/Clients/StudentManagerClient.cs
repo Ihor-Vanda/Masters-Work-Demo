@@ -19,7 +19,7 @@ public class StudentManagerClient
             System.Text.Encoding.UTF8,
             "application/json");
 
-        var response = await _httpClient.PutAsync($"http://localhost:5002/StudentManager/{courseId}/courses", jsonContent);
+        var response = await _httpClient.PutAsync($"http://localhost:5002/students/{courseId}/courses", jsonContent);
 
         Console.WriteLine(response.StatusCode);
         return response.StatusCode;
@@ -27,7 +27,7 @@ public class StudentManagerClient
 
     public async Task<HttpStatusCode> DeleteStudentFromCourse(string courseId)
     {
-        var response = await _httpClient.PutAsync($"http://localhost:5002/StudentManager/courses/{courseId}", null);
+        var response = await _httpClient.PutAsync($"http://localhost:5002/students/courses/{courseId}", null);
 
         Console.WriteLine(response.StatusCode);
         return response.StatusCode;

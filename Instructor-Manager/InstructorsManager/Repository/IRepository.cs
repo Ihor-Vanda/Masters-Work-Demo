@@ -4,7 +4,7 @@ public interface IRepository
 {
     Task<List<Instructor>> GetAllInstructors();
 
-    Task<Instructor> GetInstructorById(string id);
+    Task<Instructor?> GetInstructorById(string id);
 
     Task AddInstructor(Instructor instructor);
 

@@ -7,7 +7,7 @@ using StudentManager.Repository;
 namespace StudentManager.Controllers;
 
 [ApiController]
-[Route("[controller]")]
+[Route("students")]
 public class StudentManagerController : ControllerBase
 {
     private readonly IRepository _studentRepository;
@@ -20,7 +20,7 @@ public class StudentManagerController : ControllerBase
         _courseServiceClient = courseServiceClient;
     }
 
-    //GET: api/students
+    //GET: students
     [HttpGet]
     public async Task<ActionResult<IEnumerable<Student>>> GetStudents()
     {
@@ -30,7 +30,7 @@ public class StudentManagerController : ControllerBase
         return Ok(students);
     }
 
-    //GET: api/students/{id}
+    //GET: students/{id}
     [HttpGet("{id}")]
     public async Task<ActionResult<Student>> GetStudentById(string id)
     {
@@ -45,7 +45,7 @@ public class StudentManagerController : ControllerBase
         return Ok(student);
     }
 
-    //POST: api/students
+    //POST: students
     [HttpPost]
     public async Task<ActionResult> AddStudent([FromBody] StudentDTO studentDTO)
     {
@@ -74,7 +74,7 @@ public class StudentManagerController : ControllerBase
         return BadRequest("Date format is incorecct");
     }
 
-    //PUT: api/students/{id}
+    //PUT: students/{id}
     [HttpPut("{id}")]
     public async Task<ActionResult> UpdateStudent(string id, [FromBody] StudentDTO updatedStudent)
     {
@@ -111,7 +111,7 @@ public class StudentManagerController : ControllerBase
 
     }
 
-    //PUT: api/students/{id}/courses
+    //PUT: students/{id}/courses
     [HttpPut("{id}/courses")]
     public async Task<ActionResult> AddCoursesToStudent(string id, [FromBody] List<string> students)
     {
@@ -150,7 +150,7 @@ public class StudentManagerController : ControllerBase
         return Ok(students);
     }
 
-    //PUT: api/students/courses/{id}
+    //PUT: students/courses/{id}
     [HttpPut("/courses/{courseId}")]
     public async Task<ActionResult> DeleteCourseFromStudent(string courseId)
     {
@@ -177,7 +177,7 @@ public class StudentManagerController : ControllerBase
         return Ok(students);
     }
 
-    //DELETE: api/student/{id}
+    //DELETE: student/{id}
     [HttpDelete("{id}")]
     public async Task<ActionResult> DeleteStudent(string id)
     {
@@ -190,6 +190,11 @@ public class StudentManagerController : ControllerBase
         if (student == null)
         {
             return NotFound("The student doesn't found");
+        }
+
+        if (student.Courses.Count > 0 && student.Id != null)
+        {
+            await _courseServiceClient.DeleteStudentFromCourses(student.Id, student.Courses);
         }
 
         await _studentRepository.DeleteStudentAsync(id);

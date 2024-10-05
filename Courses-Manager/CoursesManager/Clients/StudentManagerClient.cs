@@ -11,7 +11,7 @@ public class StudentManagerClient
         _httpClient = httpClient;
     }
 
-    public async Task<HttpStatusCode> AddStudentToCourse(string courseId, List<string> requestBody)
+    public async Task<HttpResponseMessage> AddStudentToCourse(string id, List<string> requestBody)
     {
         // Сериалізація тіла запиту у формат JSON
         var jsonContent = new StringContent(
@@ -19,17 +19,26 @@ public class StudentManagerClient
             System.Text.Encoding.UTF8,
             "application/json");
 
-        var response = await _httpClient.PutAsync($"http://localhost:5002/students/{courseId}/courses", jsonContent);
+        var response = await _httpClient.PutAsync($"http://students_manager_service:8080/students/courses/{id}/add", jsonContent);
+        // var response = await _httpClient.PutAsync($"http://localhost:5002/students/{id}/courses", jsonContent);
 
-        Console.WriteLine(response.StatusCode);
-        return response.StatusCode;
+        Console.WriteLine($"Response from student-service: {response.StatusCode}");
+
+        return response;
     }
 
-    public async Task<HttpStatusCode> DeleteStudentFromCourse(string courseId)
+    public async Task<HttpResponseMessage> DeleteStudentFromCourse(string id, List<string> requestBody)
     {
-        var response = await _httpClient.PutAsync($"http://localhost:5002/students/courses/{courseId}", null);
+        var jsonContent = new StringContent(
+        System.Text.Json.JsonSerializer.Serialize(requestBody),
+        System.Text.Encoding.UTF8,
+        "application/json");
 
-        Console.WriteLine(response.StatusCode);
-        return response.StatusCode;
+        var response = await _httpClient.PutAsync($"http://students_manager_service:8080/students/courses/{id}/delete", jsonContent);
+        // var response = await _httpClient.PutAsync($"http://localhost:5002/students/courses/{id}", null);
+
+        Console.WriteLine($"Response from student-service: {response.StatusCode}");
+
+        return response;
     }
 }

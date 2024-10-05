@@ -51,7 +51,7 @@ public class MongoDBRepository : IRepository
             updatedStudent
         );
 
-        if (result.ModifiedCount == 0)
+        if (result.MatchedCount == 0)
         {
             throw new Exception("Failed to update the student. It may not exist");
         }

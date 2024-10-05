@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using MongoDB.Bson;
 using TestsManager.Clients;
 using TestsManager.DTO;
 using TestsManager.Repository;
@@ -32,6 +33,11 @@ public class TestsManagerController : ControllerBase
     [HttpGet("{id}")]
     public async Task<ActionResult<Test>> GetTest(string id)
     {
+        if (!ObjectId.TryParse(id, out var idValue))
+        {
+            return BadRequest("Invalid id");
+        }
+
         var test = await _testRepository.GetTestById(id);
 
         if (test == null)

@@ -22,7 +22,7 @@ builder.Services.AddScoped<IRepository, CourseRepository>(); // Репозито
 
 builder.Services.AddHttpClient<InstructorManagerClient>();
 builder.Services.AddHttpClient<StudentManagerClient>();
-builder.Services.AddHttpClient<TestManagerClient>();
+// builder.Services.AddHttpClient<TestManagerClient>();
 
 builder.Services.AddControllers();
 

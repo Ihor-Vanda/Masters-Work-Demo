@@ -11,7 +11,7 @@ public class InstructorManagerClient
         _httpClient = httpClient;
     }
 
-    public async Task<HttpStatusCode> ModifyInstructorToCourse(string courseId, List<string> requestBody)
+    public async Task<HttpResponseMessage> AddInstructorToCourse(string id, List<string> requestBody)
     {
         // Сериалізація тіла запиту у формат JSON
         var jsonContent = new StringContent(
@@ -19,18 +19,26 @@ public class InstructorManagerClient
             System.Text.Encoding.UTF8,
             "application/json");
 
-        var response = await _httpClient.PutAsync($"http://localhost:5003/instructors/{courseId}/courses", jsonContent);
+        var response = await _httpClient.PutAsync($"http://instructors_manager_service:8080/instructors/courses/{id}/add", jsonContent);
+        // var response = await _httpClient.PutAsync($"http://localhost:5003/instructors/{id}/courses", jsonContent);
 
-        Console.WriteLine(response.StatusCode);
+        Console.WriteLine($"Respose from instructors-service: {response.StatusCode}");
 
-        return response.StatusCode;
+        return response;
     }
 
-    public async Task<HttpStatusCode> DeleteInstructorFromCourse(string courseId)
+    public async Task<HttpResponseMessage> DeleteInstructorFromCourse(string id, List<string> requestBody)
     {
-        var response = await _httpClient.PutAsync($"http://localhost:5003/instructors/courses/{courseId}", null);
+        var jsonContent = new StringContent(
+           System.Text.Json.JsonSerializer.Serialize(requestBody),
+           System.Text.Encoding.UTF8,
+           "application/json");
 
-        Console.WriteLine(response.StatusCode);
-        return response.StatusCode;
+        // var response = await _httpClient.PutAsync($"http://localhost:5003/instructors/courses/{id}", null);
+        var response = await _httpClient.PutAsync($"http://instructors_manager_service:8080/instructors/courses/{id}/delete", jsonContent);
+
+        Console.WriteLine($"Respose from instructors-service: {response.StatusCode}");
+
+        return response;
     }
 }

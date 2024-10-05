@@ -32,6 +32,6 @@ public class Course
 
     public List<string> Students { get; set; } = []; // Initialize as empty list
 
-    public List<string> Tests { get; set; } = []; // Initialize as empty list
+    // public List<string> Tests { get; set; } = []; // Initialize as empty list
 
 }

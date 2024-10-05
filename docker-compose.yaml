@@ -52,20 +52,20 @@ services:
     ports:
       - "5003:8080"
 
-  tests-manager:
-    image: testsmanager:latest
-    build:
-      context: ./Tests-Manager
-      dockerfile: Dockerfile
-    container_name: tests_manager_service
-    depends_on:
-      - mongodb
-      - courses-manager
-    environment:
-      MongoDBSettings__ConnectionString: "mongodb://admin:password@mongodb:27017"
-      MongoDBSettings__DatabaseName: "TestsDB"
-    ports:
-      - "5004:8080"
+  # tests-manager:
+  #   image: testsmanager:latest
+  #   build:
+  #     context: ./Tests-Manager
+  #     dockerfile: Dockerfile
+  #   container_name: tests_manager_service
+  #   depends_on:
+  #     - mongodb
+  #     - courses-manager
+  #   environment:
+  #     MongoDBSettings__ConnectionString: "mongodb://admin:password@mongodb:27017"
+  #     MongoDBSettings__DatabaseName: "TestsDB"
+  #   ports:
+  #     - "5004:8080"
 
 volumes:
   mongo-data:

@@ -50,15 +50,15 @@ namespace CoursesManager.Repository
                 .Set(c => c.EndDate, updatedCourse.EndDate)
                 .Set(c => c.MaxStudents, updatedCourse.MaxStudents)
                 .Set(c => c.Instructors, updatedCourse.Instructors)
-                .Set(c => c.Students, updatedCourse.Students)
-                .Set(c => c.Tests, updatedCourse.Tests);
+                .Set(c => c.Students, updatedCourse.Students);
+            // .Set(c => c.Tests, updatedCourse.Tests);
 
             var result = await _courses.UpdateOneAsync(
                 course => course.Id == id,
                 updateDefinition
             );
 
-            if (result.ModifiedCount == 0)
+            if (result.MatchedCount == 0)
             {
                 throw new Exception("Failed to update the course. It may not exist.");
             }

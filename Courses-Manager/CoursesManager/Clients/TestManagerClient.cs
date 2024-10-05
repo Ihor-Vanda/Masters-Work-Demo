@@ -11,7 +11,7 @@ public class TestManagerClient
         _httpClient = httpClient;
     }
 
-    public async Task<HttpStatusCode> ModifyTestToCourse(string courseId, List<string> requestBody)
+    public async Task<HttpStatusCode> ModifyTestToCourse(string id, List<string> requestBody)
     {
         // Сериалізація тіла запиту у формат JSON
         var jsonContent = new StringContent(
@@ -19,15 +19,17 @@ public class TestManagerClient
             System.Text.Encoding.UTF8,
             "application/json");
 
-        var response = await _httpClient.PutAsync($"http://localhost:5004/tests/{courseId}/courses", jsonContent);
+        var response = await _httpClient.PutAsync($"http://tests_manager_service:8080/tests/{id}/courses", jsonContent);
+        // var response = await _httpClient.PutAsync($"http://localhost:5004/tests/{id}/courses", jsonContent);
 
         Console.WriteLine(response.StatusCode);
         return response.StatusCode;
     }
 
-    public async Task<HttpStatusCode> DeleteTestFromCourse(string testId)
+    public async Task<HttpStatusCode> DeleteTestFromCourse(string id)
     {
-        var response = await _httpClient.DeleteAsync($"http://localhost:5004/tests/{testId}");
+        // var response = await _httpClient.DeleteAsync($"http://localhost:5004/tests/{id}");
+        var response = await _httpClient.DeleteAsync($"http://tests_manager_service:8080/tests/{id}");
 
         Console.WriteLine(response.StatusCode);
         return response.StatusCode;

@@ -1,5 +1,6 @@
 using System.Runtime.Serialization;
 using Microsoft.AspNetCore.Mvc;
+using MongoDB.Bson;
 using StudentManager.Clients;
 using StudentManager.DTO;
 using StudentManager.Repository;
@@ -27,6 +28,7 @@ public class StudentManagerController : ControllerBase
         var students = await _studentRepository.GetAllStudents();
 
         Console.WriteLine($"Procecced request to get all students from {HttpContext.Connection.RemoteIpAddress}");
+
         return Ok(students);
     }
 
@@ -34,6 +36,12 @@ public class StudentManagerController : ControllerBase
     [HttpGet("{id}")]
     public async Task<ActionResult<Student>> GetStudentById(string id)
     {
+
+        if (!ObjectId.TryParse(id, out var idValue))
+        {
+            return BadRequest("Invalid id");
+        }
+
         var student = await _studentRepository.GetStudentByIdAsync(id);
 
         if (student == null)
@@ -42,6 +50,7 @@ public class StudentManagerController : ControllerBase
         }
 
         Console.WriteLine($"Procecced request to get stuent {id} from {HttpContext.Connection.RemoteIpAddress}");
+
         return Ok(student);
     }
 
@@ -68,6 +77,7 @@ public class StudentManagerController : ControllerBase
             await _studentRepository.AddStudentAsync(student);
 
             Console.WriteLine($"Procecced request to add student from {HttpContext.Connection.RemoteIpAddress}");
+
             return CreatedAtAction(nameof(GetStudentById), new { id = student.Id }, student);
         }
 
@@ -105,14 +115,14 @@ public class StudentManagerController : ControllerBase
             await _studentRepository.UpdateStudentAsync(id, student);
 
             Console.WriteLine($"Procecced request to update stuent {id} from {HttpContext.Connection.RemoteIpAddress}");
+
             return NoContent();
         }
         return BadRequest("Date format is invalid it must to be yyyy-mm-dd");
 
     }
 
-    //PUT: students/{id}/courses
-    [HttpPut("{id}/courses")]
+    [HttpPut("courses/{id}/add")]
     public async Task<ActionResult> AddCoursesToStudent(string id, [FromBody] List<string> students)
     {
         if (string.IsNullOrWhiteSpace(id))
@@ -145,36 +155,55 @@ public class StudentManagerController : ControllerBase
                 std.Courses.Add(id);
                 await _studentRepository.UpdateStudentAsync(std.Id, std);
             }
+            else
+            {
+                studentsList.RemoveAt(i);
+                i--;
+            }
         }
+
         Console.WriteLine($"Procecced request adding course {id} to students {students.ToList()} from {HttpContext.Connection.RemoteIpAddress}");
-        return Ok(students);
+
+        return Ok(studentsList.Select(s => s.Id).ToList());
     }
 
-    //PUT: students/courses/{id}
-    [HttpPut("/courses/{courseId}")]
-    public async Task<ActionResult> DeleteCourseFromStudent(string courseId)
+    [HttpPut("courses/{id}/delete")]
+    public async Task<ActionResult> DeleteCourseFromStudent(string id, [FromBody] List<string> students)
     {
-        if (string.IsNullOrWhiteSpace(courseId))
+        if (string.IsNullOrWhiteSpace(id) || students == null)
         {
             return BadRequest("Invalid request");
         }
 
-        var courseExists = await _courseServiceClient.CheckCourseExists(courseId);
-        if (!courseExists)
+        // var courseExists = await _courseServiceClient.CheckCourseExists(id);
+        // if (!courseExists)
+        // {
+        //     return BadRequest($"Course with id {id} does not exist.");
+        // }
+
+        var _students = await _studentRepository.GetAllStudents();
+
+        if (_students == null)
         {
-            return BadRequest($"Course with id {courseId} does not exist.");
+            return BadRequest("Can't get students from repo");
         }
 
-        var students = await _studentRepository.GetAllStudents();
-        var studentsList = students.FindAll(s => s.Courses.Contains(courseId));
+        var studentsList = _students.FindAll(s => students.Contains(s.Id)).ToList();
+
+        if (studentsList == null)
+        {
+            return BadRequest("The students doesn't exist");
+        }
 
         for (int i = 0; i < studentsList.Count; i++)
         {
-            studentsList[i].Courses.Remove(courseId);
+            studentsList[i].Courses.Remove(id);
             await _studentRepository.UpdateStudentAsync(studentsList[i].Id, studentsList[i]);
         }
-        Console.WriteLine($"Procecced request adding course {courseId} to students {students.ToList()} from {HttpContext.Connection.RemoteIpAddress}");
-        return Ok(students);
+
+        Console.WriteLine($"Procecced request adding course {id} to students {students.ToList()} from {HttpContext.Connection.RemoteIpAddress}");
+
+        return Ok(studentsList.Select(s => s.Id).ToList());
     }
 
     //DELETE: student/{id}
@@ -192,12 +221,25 @@ public class StudentManagerController : ControllerBase
             return NotFound("The student doesn't found");
         }
 
-        if (student.Courses.Count > 0 && student.Id != null)
+        if (student.Courses.Count > 0)
         {
-            await _courseServiceClient.DeleteStudentFromCourses(student.Id, student.Courses);
+            var response = await _courseServiceClient.DeleteStudentFromCourses(id);
+
+            if (response == System.Net.HttpStatusCode.OK)
+            {
+                await _studentRepository.DeleteStudentAsync(id);
+
+                Console.WriteLine($"Procecced request to delete student {id} from {HttpContext.Connection.RemoteIpAddress}");
+
+                return NoContent();
+            }
+
+            return BadRequest("Can't delete student from releted courses");
         }
 
         await _studentRepository.DeleteStudentAsync(id);
+
+        Console.WriteLine($"Procecced request to delete student {id} from {HttpContext.Connection.RemoteIpAddress}");
 
         return NoContent();
     }

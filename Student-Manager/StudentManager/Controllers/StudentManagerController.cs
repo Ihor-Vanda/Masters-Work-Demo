@@ -1,6 +1,7 @@
 using System.Runtime.Serialization;
 using Microsoft.AspNetCore.Mvc;
 using MongoDB.Bson;
+using Polly.CircuitBreaker;
 using StudentManager.Clients;
 using StudentManager.DTO;
 using StudentManager.Repository;
@@ -130,10 +131,18 @@ public class StudentManagerController : ControllerBase
             return BadRequest("Invalid request");
         }
 
-        var courseExists = await _courseServiceClient.CheckCourseExists(id);
-        if (!courseExists)
+        try
         {
-            return BadRequest($"Course with id {id} does not exist.");
+            var courseExists = await _courseServiceClient.CheckCourseExists(id);
+            if (!courseExists)
+            {
+                return BadRequest($"Course with id {id} does not exist.");
+            }
+        }
+        catch (BrokenCircuitException)
+        {
+            // Circuit breaker is open, return 503 Service Unavailable
+            return StatusCode(503, "Course service is temporarily unavailable due to a circuit breaker.");
         }
 
         var studentsList = new List<Student>();
@@ -223,18 +232,26 @@ public class StudentManagerController : ControllerBase
 
         if (student.Courses.Count > 0)
         {
-            var response = await _courseServiceClient.DeleteStudentFromCourses(id);
-
-            if (response == System.Net.HttpStatusCode.OK)
+            try
             {
-                await _studentRepository.DeleteStudentAsync(id);
+                var response = await _courseServiceClient.DeleteStudentFromCourses(id);
 
-                Console.WriteLine($"Procecced request to delete student {id} from {HttpContext.Connection.RemoteIpAddress}");
+                if (response == System.Net.HttpStatusCode.OK)
+                {
+                    await _studentRepository.DeleteStudentAsync(id);
 
-                return NoContent();
+                    Console.WriteLine($"Procecced request to delete student {id} from {HttpContext.Connection.RemoteIpAddress}");
+
+                    return NoContent();
+                }
+
+                return BadRequest("Can't delete student from releted courses");
             }
-
-            return BadRequest("Can't delete student from releted courses");
+            catch (BrokenCircuitException)
+            {
+                // Circuit breaker is open, return 503 Service Unavailable
+                return StatusCode(503, "Course service is temporarily unavailable due to a circuit breaker.");
+            }
         }
 
         await _studentRepository.DeleteStudentAsync(id);

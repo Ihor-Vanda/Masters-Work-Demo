@@ -1,11 +1,10 @@
 using System.Net;
-using System.Runtime.Serialization;
 using CoursesManager.Clients;
 using CoursesManager.DTO;
 using CoursesManager.Repository;
-using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using MongoDB.Bson;
+using Polly.CircuitBreaker;
 
 namespace CoursesManager.Controllers;
 
@@ -163,23 +162,32 @@ public class CoursesManagerController : ControllerBase
             return BadRequest("The course already have the students");
         }
 
-        var service_response = await _studentManagerClient.AddStudentToCourse(id, students);
-        if (service_response.StatusCode == HttpStatusCode.OK)
+        try
         {
-            var studentsList = await service_response.Content.ReadFromJsonAsync<List<string>>();
+            var service_response = await _studentManagerClient.AddStudentToCourse(id, students);
 
-            if (studentsList == null)
+            if (service_response.StatusCode == HttpStatusCode.OK)
             {
-                return Ok("The students already have the course");
+                var studentsList = await service_response.Content.ReadFromJsonAsync<List<string>>();
 
+                if (studentsList == null)
+                {
+                    return Ok("The students already have the course");
+
+                }
+
+                course.Students.AddRange(studentsList);
+                await _courseRepository.UpdateCourseAsync(id, course);
+
+                Console.WriteLine($"Procecced request to add students to course {id} from {HttpContext.Connection.RemoteIpAddress}");
+
+                return Ok(course);
             }
-
-            course.Students.AddRange(studentsList);
-            await _courseRepository.UpdateCourseAsync(id, course);
-
-            Console.WriteLine($"Procecced request to add students to course {id} from {HttpContext.Connection.RemoteIpAddress}");
-
-            return Ok(course);
+        }
+        catch (BrokenCircuitException)
+        {
+            // Circuit breaker is open, return 503 Service Unavailable
+            return StatusCode(503, "Students service is temporarily unavailable due to a circuit breaker.");
         }
 
         return BadRequest("Invalid students id");
@@ -210,23 +218,31 @@ public class CoursesManagerController : ControllerBase
             return BadRequest("The course don't have the students");
         }
 
-        var service_response = await _studentManagerClient.DeleteStudentFromCourse(id, students);
-        if (service_response.StatusCode == HttpStatusCode.OK)
+        try
         {
-            var studentsList = await service_response.Content.ReadFromJsonAsync<List<string>>();
-
-            if (studentsList == null)
+            var service_response = await _studentManagerClient.DeleteStudentFromCourse(id, students);
+            if (service_response.StatusCode == HttpStatusCode.OK)
             {
-                return Ok("The students don't have the course");
+                var studentsList = await service_response.Content.ReadFromJsonAsync<List<string>>();
 
+                if (studentsList == null)
+                {
+                    return Ok("The students don't have the course");
+
+                }
+
+                course.Students.RemoveAll(studentsList.Contains);
+                await _courseRepository.UpdateCourseAsync(id, course);
+
+                Console.WriteLine($"Procecced request to delete students from course {id} from {HttpContext.Connection.RemoteIpAddress}");
+
+                return Ok(course);
             }
-
-            course.Students.RemoveAll(studentsList.Contains);
-            await _courseRepository.UpdateCourseAsync(id, course);
-
-            Console.WriteLine($"Procecced request to delete students from course {id} from {HttpContext.Connection.RemoteIpAddress}");
-
-            return Ok(course);
+        }
+        catch (BrokenCircuitException)
+        {
+            // Circuit breaker is open, return 503 Service Unavailable
+            return StatusCode(503, "Students service is temporarily unavailable due to a circuit breaker.");
         }
 
         return BadRequest("Invalid students id");
@@ -305,22 +321,30 @@ public class CoursesManagerController : ControllerBase
             return BadRequest("The course already have the instructors");
         }
 
-        var service_response = await _instructorManagerClient.AddInstructorToCourse(id, instructors);
-        if (service_response.StatusCode == HttpStatusCode.OK)
+        try
         {
-            var instructorsList = await service_response.Content.ReadFromJsonAsync<List<string>>();
-
-            if (instructorsList == null)
+            var service_response = await _instructorManagerClient.AddInstructorToCourse(id, instructors);
+            if (service_response.StatusCode == HttpStatusCode.OK)
             {
-                return Ok("Instructors already have the course");
+                var instructorsList = await service_response.Content.ReadFromJsonAsync<List<string>>();
 
+                if (instructorsList == null)
+                {
+                    return Ok("Instructors already have the course");
+
+                }
+
+                course.Instructors.AddRange(instructorsList);
+                await _courseRepository.UpdateCourseAsync(id, course);
+
+                Console.WriteLine($"Procecced request to add instructors to course {id} from {HttpContext.Connection.RemoteIpAddress}");
+                return Ok(course);
             }
-
-            course.Instructors.AddRange(instructorsList);
-            await _courseRepository.UpdateCourseAsync(id, course);
-
-            Console.WriteLine($"Procecced request to add instructors to course {id} from {HttpContext.Connection.RemoteIpAddress}");
-            return Ok(course);
+        }
+        catch (BrokenCircuitException)
+        {
+            // Circuit breaker is open, return 503 Service Unavailable
+            return StatusCode(503, "Instructors service is temporarily unavailable due to a circuit breaker.");
         }
 
         return BadRequest("Invalid instructors id");
@@ -350,22 +374,30 @@ public class CoursesManagerController : ControllerBase
             return BadRequest("The course don't have the instructors");
         }
 
-        var service_response = await _instructorManagerClient.DeleteInstructorFromCourse(id, instructors);
-        if (service_response.StatusCode == HttpStatusCode.OK)
+        try
         {
-            var instructorsList = await service_response.Content.ReadFromJsonAsync<List<string>>();
-
-            if (instructorsList == null)
+            var service_response = await _instructorManagerClient.DeleteInstructorFromCourse(id, instructors);
+            if (service_response.StatusCode == HttpStatusCode.OK)
             {
-                return Ok("The Instructors don't have the course");
+                var instructorsList = await service_response.Content.ReadFromJsonAsync<List<string>>();
 
+                if (instructorsList == null)
+                {
+                    return Ok("The Instructors don't have the course");
+
+                }
+
+                course.Instructors.RemoveAll(instructorsList.Contains);
+                await _courseRepository.UpdateCourseAsync(id, course);
+
+                Console.WriteLine($"Procecced request to delete instructors from course {id} from {HttpContext.Connection.RemoteIpAddress}");
+                return Ok(course);
             }
-
-            course.Instructors.RemoveAll(instructorsList.Contains);
-            await _courseRepository.UpdateCourseAsync(id, course);
-
-            Console.WriteLine($"Procecced request to delete instructors from course {id} from {HttpContext.Connection.RemoteIpAddress}");
-            return Ok(course);
+        }
+        catch (BrokenCircuitException)
+        {
+            // Circuit breaker is open, return 503 Service Unavailable
+            return StatusCode(503, "Instructors service is temporarily unavailable due to a circuit breaker.");
         }
 
         return BadRequest("Invalid instructors id");
@@ -482,21 +514,37 @@ public class CoursesManagerController : ControllerBase
 
         if (existingCourse.Students.Count > 0)
         {
-            var s_response = await _studentManagerClient.DeleteStudentFromCourse(id, existingCourse.Students);
-
-            if (s_response.StatusCode != HttpStatusCode.OK)
+            try
             {
-                return BadRequest("Can't delete students from the course");
+                var s_response = await _studentManagerClient.DeleteStudentFromCourse(id, existingCourse.Students);
+
+                if (s_response.StatusCode != HttpStatusCode.OK)
+                {
+                    return BadRequest("Can't delete students from the course");
+                }
+            }
+            catch (BrokenCircuitException)
+            {
+                // Circuit breaker is open, return 503 Service Unavailable
+                return StatusCode(503, "Student service is temporarily unavailable due to a circuit breaker.");
             }
         }
 
         if (existingCourse.Instructors.Count > 0)
         {
-            var i_response = await _instructorManagerClient.DeleteInstructorFromCourse(id, existingCourse.Instructors);
-
-            if (i_response.StatusCode != HttpStatusCode.OK)
+            try
             {
-                return BadRequest("Can't delete instructors from the course");
+                var i_response = await _instructorManagerClient.DeleteInstructorFromCourse(id, existingCourse.Instructors);
+
+                if (i_response.StatusCode != HttpStatusCode.OK)
+                {
+                    return BadRequest("Can't delete instructors from the course");
+                }
+            }
+            catch (BrokenCircuitException)
+            {
+                // Circuit breaker is open, return 503 Service Unavailable
+                return StatusCode(503, "Instructors service is temporarily unavailable due to a circuit breaker.");
             }
         }
 

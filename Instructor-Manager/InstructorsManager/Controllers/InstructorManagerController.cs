@@ -3,6 +3,7 @@ using InstructorsManager.DTO;
 using InstructorsManager.Repository;
 using Microsoft.AspNetCore.Mvc;
 using MongoDB.Bson;
+using Polly.CircuitBreaker;
 
 namespace InstructorsManager.Controllers;
 
@@ -127,10 +128,18 @@ public class InstructorManagerController : ControllerBase
             return BadRequest("Invalid request");
         }
 
-        var courseExists = await _courseServiceClient.CheckCourseExists(id);
-        if (!courseExists)
+        try
         {
-            return BadRequest($"Course with id {id} does not exist.");
+            var courseExists = await _courseServiceClient.CheckCourseExists(id);
+            if (!courseExists)
+            {
+                return BadRequest($"Course with id {id} does not exist.");
+            }
+        }
+        catch (BrokenCircuitException)
+        {
+            // Circuit breaker is open, return 503 Service Unavailable
+            return StatusCode(503, "Course service is temporarily unavailable due to a circuit breaker.");
         }
 
         var instructorsList = new List<Instructor>();
@@ -221,18 +230,26 @@ public class InstructorManagerController : ControllerBase
 
         if (instructor.Courses.Count > 0)
         {
-            var response = await _courseServiceClient.DeleteInstructorFromCourses(id);
-
-            if (response == System.Net.HttpStatusCode.OK)
+            try
             {
-                await _instructorRepository.DeleteInstructor(id);
+                var response = await _courseServiceClient.DeleteInstructorFromCourses(id);
 
-                Console.WriteLine($"Procecced request to delete instructors {id} from {HttpContext.Connection.RemoteIpAddress}");
+                if (response == System.Net.HttpStatusCode.OK)
+                {
+                    await _instructorRepository.DeleteInstructor(id);
 
-                return NoContent();
+                    Console.WriteLine($"Procecced request to delete instructors {id} from {HttpContext.Connection.RemoteIpAddress}");
+
+                    return NoContent();
+                }
+
+                return BadRequest("Can't delete instructor from releted courses");
             }
-
-            return BadRequest("Can't delete instructor from releted courses");
+            catch (BrokenCircuitException)
+            {
+                // Circuit breaker is open, return 503 Service Unavailable
+                return StatusCode(503, "Course service is temporarily unavailable due to a circuit breaker.");
+            }
         }
 
         await _instructorRepository.DeleteInstructor(id);

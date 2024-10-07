@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Sockets;
 
 namespace InstructorsManager.Clients;
 
@@ -13,11 +14,25 @@ public class CourseServiceClient
 
     public async Task<bool> CheckCourseExists(string id)
     {
-        // var response = await _httpClient.GetAsync($"http://localhost:5001/courses/{courseId}");
-        var response = await _httpClient.GetAsync($"http://courses_manager_service:8080/courses/{id}");
+        try
+        {
+            // var response = await _httpClient.GetAsync($"http://localhost:5001/courses/{courseId}");
+            var response = await _httpClient.GetAsync($"http://courses_manager_service:8080/courses/{id}");
 
-        Console.WriteLine($"Response from courses-service: {response.StatusCode}");
-        return response.IsSuccessStatusCode; // Повертаємо true, якщо курс існує
+            Console.WriteLine($"Response from courses-service: {response.StatusCode}");
+            return response.IsSuccessStatusCode;
+        }
+        catch (HttpRequestException ex) when (ex.InnerException is SocketException)
+        {
+            // This happens if the service is unreachable or DNS fails
+            Console.WriteLine("Service is unavailable or DNS failure: " + ex.Message);
+            return false;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Unexpected error: {ex.Message}");
+            throw; // rethrow if it's an unknown error, it should be handled by Circuit Breaker or other mechanisms
+        }
     }
 
     public async Task<HttpStatusCode> DeleteInstructorFromCourses(string id)
@@ -27,11 +42,25 @@ public class CourseServiceClient
         //    System.Text.Encoding.UTF8,
         //    "application/json");
 
-        var response = await _httpClient.PutAsync($"http://courses_manager_service:8080/instructors/{id}", null);
-        // var response = await _httpClient.PutAsync($"http://localhost:5001/courses/instructor/{id}/delete", jsonContent);
+        try
+        {
+            var response = await _httpClient.PutAsync($"http://courses_manager_service:8080/instructors/{id}", null);
+            // var response = await _httpClient.PutAsync($"http://localhost:5001/courses/instructor/{id}/delete", jsonContent);
 
-        Console.WriteLine($"Response from courses-service: {response.StatusCode}");
+            Console.WriteLine($"Response from courses-service: {response.StatusCode}");
 
-        return response.StatusCode;
+            return response.StatusCode;
+        }
+        catch (HttpRequestException ex) when (ex.InnerException is SocketException)
+        {
+            // This happens if the service is unreachable or DNS fails
+            Console.WriteLine("Service is unavailable or DNS failure: " + ex.Message);
+            return HttpStatusCode.ServiceUnavailable;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Unexpected error: {ex.Message}");
+            throw; // rethrow if it's an unknown error, it should be handled by Circuit Breaker or other mechanisms
+        }
     }
 }

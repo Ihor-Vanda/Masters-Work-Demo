@@ -1,4 +1,5 @@
 using InstructorsManager.Clients;
+using InstructorsManager.RabbitMQ;
 using InstructorsManager.Repository;
 using InstructorsManager.Settings;
 using Polly;
@@ -17,6 +18,9 @@ builder.Services.AddScoped<IRepository, InstructorRepository>();
 
 builder.Services.AddHttpClient<CourseServiceClient>()
     .AddPolicyHandler(GetCircuitBreakerPolicy());
+
+builder.Services.AddHostedService<RabbitMQConsumer>();
+builder.Services.AddSingleton<RabbitMQClient>();
 
 builder.Services.AddControllers();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle

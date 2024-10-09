@@ -1,7 +1,7 @@
 using System.Text;
 using RabbitMQ.Client;
 
-namespace StudentManager.RabbitMQ;
+namespace CoursesManager.RabbitMQ;
 
 public class RabbitMQClient
 {
@@ -10,7 +10,7 @@ public class RabbitMQClient
 
     public RabbitMQClient()
     {
-        var factory = new ConnectionFactory() 
+        var factory = new ConnectionFactory()
         {
             HostName = "rabbitmq",
             Port = 5672,

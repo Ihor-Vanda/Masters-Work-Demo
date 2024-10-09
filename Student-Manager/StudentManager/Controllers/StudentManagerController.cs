@@ -1,8 +1,6 @@
-using System.Runtime.Serialization;
 using Microsoft.AspNetCore.Mvc;
 using MongoDB.Bson;
 using Polly.CircuitBreaker;
-using RabbitMQ.Client.Logging;
 using StudentManager.Clients;
 using StudentManager.DTO;
 using StudentManager.RabbitMQ;
@@ -80,7 +78,7 @@ public class StudentManagerController : ControllerBase
             LastName = studentDTO.LastName,
             BirthDate = birthDate,
             PhoneNumber = studentDTO.PhoneNumber,
-            Email = studentDTO.Email,
+            Email = studentDTO.Email
         };
 
         await _studentRepository.AddStudentAsync(student);
@@ -181,7 +179,7 @@ public class StudentManagerController : ControllerBase
     [HttpPut("courses/{id}/delete")]
     public async Task<ActionResult> DeleteCourseFromStudent(string id, [FromBody] List<string> studentIds)
     {
-        if (string.IsNullOrWhiteSpace(id) || studentIds == null || !studentIds.Any())
+        if (string.IsNullOrWhiteSpace(id) || studentIds == null || studentIds.Count == 0)
         {
             return BadRequest("Invalid request");
         }
@@ -199,7 +197,6 @@ public class StudentManagerController : ControllerBase
             return BadRequest("The specified students do not exist.");
         }
 
-        // Remove course from each student
         var updateTasks = studentsList.Select(std =>
         {
             std.Courses.Remove(id);
@@ -236,7 +233,7 @@ public class StudentManagerController : ControllerBase
 
                 if (response != System.Net.HttpStatusCode.OK)
                 {
-                    return BadRequest("Can't delete student from related courses");
+                    return StatusCode(503,"Remote service temporaly unavaible");
                 }
 
                 await _studentRepository.DeleteStudentAsync(id);
@@ -247,15 +244,14 @@ public class StudentManagerController : ControllerBase
             }
             catch (BrokenCircuitException)
             {
-                // Circuit breaker is open, return 503 Service Unavailable
-                _rabbitMQClient.PublishMessage("student-deleting", id);
-                return StatusCode(503, "Course service is temporarily unavailable due to a circuit breaker.");
+                _rabbitMQClient.PublishMessage("student-delete", id);
+                await _studentRepository.DeleteStudentAsync(id);
+                return StatusCode(503,"Sending request to delete student to queue");
             }
         }
 
         await _studentRepository.DeleteStudentAsync(id);
-
-        Console.WriteLine($"Sending request to delete student {id} from {HttpContext.Connection.RemoteIpAddress} to queue");
+        Console.WriteLine($"Processed request deleting course {id} from students {string.Join(", ", id)} from {HttpContext.Connection.RemoteIpAddress}");
 
         return NoContent();
     }

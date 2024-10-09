@@ -28,10 +28,7 @@ public class Course
 
     public int MaxStudents { get; set; }
 
-    public List<string> Instructors { get; set; } = []; // Initialize as empty list
+    public List<string> Instructors { get; set; } = [];
 
-    public List<string> Students { get; set; } = []; // Initialize as empty list
-
-    // public List<string> Tests { get; set; } = []; // Initialize as empty list
-
+    public List<string> Students { get; set; } = [];
 }

@@ -1,7 +1,7 @@
 services:
   mongodb:
     image: mongo:latest
-    container_name: master_work_mongoDB
+    container_name: mongodb
     ports:
       - "27017:27017"
     volumes:
@@ -14,11 +14,16 @@ services:
     image: rabbitmq:3-management
     container_name: rabbitmq
     ports:
-      - "5672:5672" # RabbitMQ (AMQP) port
-      - "15672:15672" # RabbitMQ Management UI port
+      - "5672:5672"
+      - "15672:15672"
     environment:
       RABBITMQ_DEFAULT_USER: user
       RABBITMQ_DEFAULT_PASS: password
+    healthcheck:
+      test: ["CMD", "rabbitmqctl", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   courses-manager:
     image: coursesmanager:latest
@@ -27,7 +32,8 @@ services:
       dockerfile: Dockerfile
     container_name: courses_manager_service
     depends_on:
-      - mongodb
+      rabbitmq:
+        condition: service_healthy
     environment:
       MongoDBSettings__ConnectionString: "mongodb://admin:password@mongodb:27017"
       MongoDBSettings__DatabaseName: "CoursesDB"
@@ -41,7 +47,8 @@ services:
       dockerfile: Dockerfile
     container_name: students_manager_service
     depends_on:
-      - mongodb
+      rabbitmq:
+        condition: service_healthy
     environment:
       MongoDBSettings__ConnectionString: "mongodb://admin:password@mongodb:27017"
       MongoDBSettings__DatabaseName: "StudentsDB"
@@ -55,27 +62,13 @@ services:
       dockerfile: Dockerfile
     container_name: instructors_manager_service
     depends_on:
-      - mongodb
+      rabbitmq:
+        condition: service_healthy
     environment:
       MongoDBSettings__ConnectionString: "mongodb://admin:password@mongodb:27017"
       MongoDBSettings__DatabaseName: "InstructorsDB"
     ports:
       - "5003:8080"
-
-  # tests-manager:
-  #   image: testsmanager:latest
-  #   build:
-  #     context: ./Tests-Manager
-  #     dockerfile: Dockerfile
-  #   container_name: tests_manager_service
-  #   depends_on:
-  #     - mongodb
-  #     - courses-manager
-  #   environment:
-  #     MongoDBSettings__ConnectionString: "mongodb://admin:password@mongodb:27017"
-  #     MongoDBSettings__DatabaseName: "TestsDB"
-  #   ports:
-  #     - "5004:8080"
 
 volumes:
   mongo-data:

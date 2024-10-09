@@ -1,4 +1,5 @@
 using CoursesManager.Clients;
+using CoursesManager.RabbitMQ;
 using CoursesManager.Repository;
 using CoursesManager.Settings;
 using Polly;
@@ -6,31 +7,23 @@ using Polly.Extensions.Http;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Читання конфігурації MongoDBSettings з файлу appsettings.json
-var mongoDBSettings = builder.Configuration.GetSection("MongoDBSettings").Get<MongoDBSettings>();
+var mongoDBSettings = builder.Configuration.GetSection("MongoDBSettings").Get<MongoDBSettings>() ?? throw new InvalidOperationException("MongoDB settings are not configured properly.");
 
-// Перевірка, чи успішно прочитані налаштування
-if (mongoDBSettings == null)
-{
-    throw new InvalidOperationException("MongoDB settings are not configured properly.");
-}
-
-// Реєстрація MongoDBSettings як Singleton
 builder.Services.AddSingleton(mongoDBSettings);
 
-// Реєстрація репозиторію і сервісу
-builder.Services.AddSingleton<MongoDBRepository>(); // Репозиторій для MongoDB
-builder.Services.AddScoped<IRepository, CourseRepository>(); // Репозиторій для курсів
+builder.Services.AddSingleton<MongoDBRepository>();
+builder.Services.AddScoped<IRepository, CourseRepository>();
 
 builder.Services.AddHttpClient<InstructorManagerClient>()
     .AddPolicyHandler(GetCircuitBreakerPolicy());
 builder.Services.AddHttpClient<StudentManagerClient>()
     .AddPolicyHandler(GetCircuitBreakerPolicy());
-// builder.Services.AddHttpClient<TestManagerClient>();
+
+builder.Services.AddHostedService<RabbitMQConsumer>();
+builder.Services.AddSingleton<RabbitMQClient>();
 
 builder.Services.AddControllers();
 
-// Налаштування Swagger/OpenAPI
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 

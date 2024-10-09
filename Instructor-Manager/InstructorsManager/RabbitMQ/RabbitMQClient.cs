@@ -1,7 +1,7 @@
 using System.Text;
 using RabbitMQ.Client;
 
-namespace StudentManager.RabbitMQ;
+namespace InstructorsManager.RabbitMQ;
 
 public class RabbitMQClient
 {

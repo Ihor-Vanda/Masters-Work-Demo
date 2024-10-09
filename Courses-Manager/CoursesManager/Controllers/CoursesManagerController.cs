@@ -1,6 +1,7 @@
 using System.Net;
 using CoursesManager.Clients;
 using CoursesManager.DTO;
+using CoursesManager.RabbitMQ;
 using CoursesManager.Repository;
 using Microsoft.AspNetCore.Mvc;
 using MongoDB.Bson;
@@ -15,18 +16,21 @@ public class CoursesManagerController : ControllerBase
     private readonly IRepository _courseRepository;
 
     private readonly InstructorManagerClient _instructorManagerClient;
+
     private readonly StudentManagerClient _studentManagerClient;
-    // private readonly TestManagerClient _testManagerClient;
+
+    private readonly RabbitMQClient _rabbitMQClient;
 
     public CoursesManagerController(
         IRepository courseService,
         InstructorManagerClient instructorManagerClient,
-        StudentManagerClient studentManagerClient)
+        StudentManagerClient studentManagerClient,
+        RabbitMQClient rabbitMQClient)
     {
         _courseRepository = courseService;
         _instructorManagerClient = instructorManagerClient;
         _studentManagerClient = studentManagerClient;
-        // _testManagerClient = testManagerClient;
+        _rabbitMQClient = rabbitMQClient;
     }
 
     // GET: /courses
@@ -36,6 +40,7 @@ public class CoursesManagerController : ControllerBase
         var courses = await _courseRepository.GetAllCoursesAsync();
 
         Console.WriteLine($"Procecced request to get all courses from{HttpContext.Connection.RemoteIpAddress}");
+
         return Ok(courses);
     }
 
@@ -52,7 +57,7 @@ public class CoursesManagerController : ControllerBase
 
         if (course == null)
         {
-            return NotFound();
+            return NotFound("Course not found");
         }
 
         Console.WriteLine($"Procecced request to get course {id} from{HttpContext.Connection.RemoteIpAddress}");
@@ -65,33 +70,35 @@ public class CoursesManagerController : ControllerBase
     {
         if (courseDto == null)
         {
-            return BadRequest("Курс не може бути порожнім.");
+            return BadRequest("Course can't be null");
         }
 
-        if (DateTime.TryParseExact(courseDto.StartDate, "yyyy-MM-dd", null, System.Globalization.DateTimeStyles.None, out var startDate)
-        && DateTime.TryParseExact(courseDto.EndDate, "yyyy-MM-dd", null, System.Globalization.DateTimeStyles.None, out var endDate))
+        if (!DateTime.TryParseExact(courseDto.StartDate, "yyyy-MM-dd", null, System.Globalization.DateTimeStyles.None, out var startDate))
         {
-            // Map CourseDto to Course
-            var course = new Course
-            {
-                Title = courseDto.Title,
-                Description = courseDto.Description,
-                CourseCode = courseDto.CourseCode,
-                Language = courseDto.Language,
-                Status = courseDto.Status,
-                StartDate = startDate,
-                EndDate = endDate,
-                MaxStudents = courseDto.MaxStudents,
-                // Instructors, Students, Tests are omitted
-            };
-
-            await _courseRepository.CreateCourseAsync(course);
-
-            Console.WriteLine($"Procecced request to add course from{HttpContext.Connection.RemoteIpAddress}");
-            return CreatedAtAction(nameof(GetCourseById), new { id = course.Id }, course);
+            return BadRequest("Date format is incorrect. Expected format: yyyy-MM-dd");
         }
 
-        return BadRequest("Date format must be yyyy-MM-dd");
+        if (!DateTime.TryParseExact(courseDto.EndDate, "yyyy-MM-dd", null, System.Globalization.DateTimeStyles.None, out var endDate))
+        {
+            return BadRequest("Date format is incorrect. Expected format: yyyy-MM-dd");
+        }
+
+        var course = new Course
+        {
+            Title = courseDto.Title,
+            Description = courseDto.Description,
+            CourseCode = courseDto.CourseCode,
+            Language = courseDto.Language,
+            Status = courseDto.Status,
+            StartDate = startDate,
+            EndDate = endDate,
+            MaxStudents = courseDto.MaxStudents,
+        };
+
+        await _courseRepository.CreateCourseAsync(course);
+
+        Console.WriteLine($"Procecced request to add course from{HttpContext.Connection.RemoteIpAddress}");
+        return CreatedAtAction(nameof(GetCourseById), new { id = course.Id }, course);
     }
 
     // PUT: courses/{id}
@@ -103,38 +110,41 @@ public class CoursesManagerController : ControllerBase
             return BadRequest("Invalid request.");
         }
 
-        // Перевіряємо, чи обов'язкові поля заповнені
         if (string.IsNullOrWhiteSpace(updatedCourseDTO.Title) || string.IsNullOrWhiteSpace(updatedCourseDTO.CourseCode))
         {
             return BadRequest("Reqired field are empty");
         }
 
-        // Перевіряємо, чи існує курс з таким Id
         var course = await _courseRepository.GetCourseByIdAsync(id);
         if (course == null)
         {
             return NotFound("The course not found");
         }
 
-        if (DateTime.TryParseExact(updatedCourseDTO.StartDate, "yyyy-MM-dd", null, System.Globalization.DateTimeStyles.None, out var startDate)
-       && DateTime.TryParseExact(updatedCourseDTO.EndDate, "yyyy-MM-dd", null, System.Globalization.DateTimeStyles.None, out var endDate))
+        if (!DateTime.TryParseExact(updatedCourseDTO.StartDate, "yyyy-MM-dd", null, System.Globalization.DateTimeStyles.None, out var startDate))
         {
-            course.Title = updatedCourseDTO.Title;
-            course.Description = updatedCourseDTO.Description;
-            course.CourseCode = updatedCourseDTO.CourseCode;
-            course.Language = updatedCourseDTO.Language;
-            course.Status = updatedCourseDTO.Status;
-            course.StartDate = startDate;
-            course.EndDate = endDate;
-            course.MaxStudents = updatedCourseDTO.MaxStudents;
-
-            await _courseRepository.UpdateCourseAsync(id, course);
-
-            Console.WriteLine($"Procecced request to update course {id} from {HttpContext.Connection.RemoteIpAddress}");
-            return NoContent();
+            return BadRequest("Date format is incorrect. Expected format: yyyy-MM-dd");
         }
 
-        return BadRequest("Date format must be yyyy-MM-dd");
+        if (!DateTime.TryParseExact(updatedCourseDTO.EndDate, "yyyy-MM-dd", null, System.Globalization.DateTimeStyles.None, out var endDate))
+        {
+            return BadRequest("Date format is incorrect. Expected format: yyyy-MM-dd");
+        }
+
+        course.Title = updatedCourseDTO.Title;
+        course.Description = updatedCourseDTO.Description;
+        course.CourseCode = updatedCourseDTO.CourseCode;
+        course.Language = updatedCourseDTO.Language;
+        course.Status = updatedCourseDTO.Status;
+        course.StartDate = startDate;
+        course.EndDate = endDate;
+        course.MaxStudents = updatedCourseDTO.MaxStudents;
+
+        await _courseRepository.UpdateCourseAsync(id, course);
+
+        Console.WriteLine($"Procecced request to update course {id} from {HttpContext.Connection.RemoteIpAddress}");
+
+        return NoContent();
     }
 
     // PUT: courses/students/{id}/add
@@ -149,7 +159,7 @@ public class CoursesManagerController : ControllerBase
         var course = await _courseRepository.GetCourseByIdAsync(id);
         if (course == null)
         {
-            return NotFound("Курс не знайдено.");
+            return NotFound("The course not found");
         }
 
         students = students
@@ -173,7 +183,6 @@ public class CoursesManagerController : ControllerBase
                 if (studentsList == null)
                 {
                     return Ok("The students already have the course");
-
                 }
 
                 course.Students.AddRange(studentsList);
@@ -186,11 +195,13 @@ public class CoursesManagerController : ControllerBase
         }
         catch (BrokenCircuitException)
         {
-            // Circuit breaker is open, return 503 Service Unavailable
-            return StatusCode(503, "Students service is temporarily unavailable due to a circuit breaker.");
+            _rabbitMQClient.PublishMessage("student-course-add", id + "," + String.Join(",", students));
+            course.Students.AddRange(students);
+            await _courseRepository.UpdateCourseAsync(id, course);
+            return StatusCode(503, "Sending request add students to course to queue");
         }
 
-        return BadRequest("Invalid students id");
+        return Ok(course);
     }
 
     [HttpPut("/students/{id}/delete")]
@@ -228,7 +239,6 @@ public class CoursesManagerController : ControllerBase
                 if (studentsList == null)
                 {
                     return Ok("The students don't have the course");
-
                 }
 
                 course.Students.RemoveAll(studentsList.Contains);
@@ -241,29 +251,13 @@ public class CoursesManagerController : ControllerBase
         }
         catch (BrokenCircuitException)
         {
-            // Circuit breaker is open, return 503 Service Unavailable
-            return StatusCode(503, "Students service is temporarily unavailable due to a circuit breaker.");
+            _rabbitMQClient.PublishMessage("student-course-delete", id + "," + String.Join(",", students));
+            course.Students.RemoveAll(students.Contains);
+            await _courseRepository.UpdateCourseAsync(id, course);
+            return StatusCode(503, "Sending request add students to course to queue");
         }
 
-        return BadRequest("Invalid students id");
-
-        // var coursesList = new List<Course>();
-        // foreach (var course in courses)
-        // {
-        //     var c = await _courseRepository.GetCourseByIdAsync(course);
-        //     if (c != null)
-        //     {
-        //         coursesList.Add(c);
-        //     }
-        // }
-
-        // for (int i = 0; i < coursesList.Count; i++)
-        // {
-        //     coursesList[i].Students.Remove(id);
-        //     await _courseRepository.UpdateCourseAsync(coursesList[i].Id, coursesList[i]);
-        // }
-
-        // return Ok(id);
+        return Ok(course);
     }
 
     [HttpPut("/students/{id}")]
@@ -287,11 +281,14 @@ public class CoursesManagerController : ControllerBase
             return Ok(id);
         }
 
-        for (int i = 0; i < coursesList.Count; i++)
+        var updateTasks = coursesList
+        .Select(async x =>
         {
-            coursesList[i].Students.Remove(id);
-            await _courseRepository.UpdateCourseAsync(coursesList[i].Id, coursesList[i]);
-        }
+            x.Students.Remove(id);
+            await _courseRepository.UpdateCourseAsync(x.Id, x);
+        });
+
+        await Task.WhenAll(updateTasks);
 
         return Ok(id);
     }
@@ -331,7 +328,6 @@ public class CoursesManagerController : ControllerBase
                 if (instructorsList == null)
                 {
                     return Ok("Instructors already have the course");
-
                 }
 
                 course.Instructors.AddRange(instructorsList);
@@ -343,11 +339,13 @@ public class CoursesManagerController : ControllerBase
         }
         catch (BrokenCircuitException)
         {
-            // Circuit breaker is open, return 503 Service Unavailable
-            return StatusCode(503, "Instructors service is temporarily unavailable due to a circuit breaker.");
+            _rabbitMQClient.PublishMessage("instructor-course-add", id + "," + String.Join(",", instructors));
+            course.Students.AddRange(instructors);
+            await _courseRepository.UpdateCourseAsync(id, course);
+            return StatusCode(503, "Sending request add instructors to course to queue");
         }
 
-        return BadRequest("Invalid instructors id");
+        return Ok(course);
     }
 
     [HttpPut("/instructors/{id}/delete")]
@@ -384,7 +382,6 @@ public class CoursesManagerController : ControllerBase
                 if (instructorsList == null)
                 {
                     return Ok("The Instructors don't have the course");
-
                 }
 
                 course.Instructors.RemoveAll(instructorsList.Contains);
@@ -396,29 +393,13 @@ public class CoursesManagerController : ControllerBase
         }
         catch (BrokenCircuitException)
         {
-            // Circuit breaker is open, return 503 Service Unavailable
-            return StatusCode(503, "Instructors service is temporarily unavailable due to a circuit breaker.");
+            _rabbitMQClient.PublishMessage("instructor-course-delete", id + "," + String.Join(",", instructors));
+            course.Students.RemoveAll(instructors.Contains);
+            await _courseRepository.UpdateCourseAsync(id, course);
+            return StatusCode(503, "Sending request delete instructors from course to queue");
         }
 
-        return BadRequest("Invalid instructors id");
-
-        // var coursesList = new List<Course>();
-        // foreach (var course in courses)
-        // {
-        //     var c = await _courseRepository.GetCourseByIdAsync(course);
-        //     if (c != null)
-        //     {
-        //         coursesList.Add(c);
-        //     }
-        // }
-
-        // for (int i = 0; i < coursesList.Count; i++)
-        // {
-        //     coursesList[i].Instructors.Remove(id);
-        //     await _courseRepository.UpdateCourseAsync(coursesList[i].Id, coursesList[i]);
-        // }
-
-        // return Ok(id);
+        return Ok(course);
     }
 
     [HttpPut("/instructors/{id}")]
@@ -442,59 +423,16 @@ public class CoursesManagerController : ControllerBase
             return Ok(id);
         }
 
-        for (int i = 0; i < coursesList.Count; i++)
+        var updateTasks = coursesList.Select(async x =>
         {
-            coursesList[i].Instructors.Remove(id);
-            await _courseRepository.UpdateCourseAsync(coursesList[i].Id, coursesList[i]);
-        }
+            x.Instructors.Remove(id);
+            await _courseRepository.UpdateCourseAsync(x.Id, x);
+        });
+
+        await Task.WhenAll(updateTasks);
 
         return Ok(id);
     }
-
-    // PUT: courses/tests/{id}
-    // [HttpPut("/tests/{id}/add")]
-    // public async Task<IActionResult> AddTestsToCourse(string id, [FromBody] List<string> tests)
-    // {
-    //     if (string.IsNullOrWhiteSpace(id))
-    //     {
-    //         return BadRequest("Invalid course ID.");
-    //     }
-
-    //     var course = await _courseRepository.GetCourseByIdAsync(id);
-    //     if (course == null)
-    //     {
-    //         return NotFound("Курс не знайдено.");
-    //     }
-
-    //     tests ??= [];
-
-    //     course.Tests.AddRange(tests);
-    //     await _courseRepository.UpdateCourseAsync(id, course);
-
-    //     return Ok(course);
-    // }
-
-    // [HttpPut("/tests/{id}/delete")]
-    // public async Task<ActionResult> DeleteTestFromCourses(string id, [FromBody] string course)
-    // {
-
-    //     if (string.IsNullOrWhiteSpace(id) || string.IsNullOrWhiteSpace(course))
-    //     {
-    //         return BadRequest("Invalid id");
-    //     }
-
-    //     var c = await _courseRepository.GetCourseByIdAsync(course);
-    //     if (c == null)
-    //     {
-    //         return BadRequest("Course id is invalid");
-    //     }
-
-    //     c.Tests.Remove(id);
-    //     await _courseRepository.UpdateCourseAsync(course, c);
-
-    //     return Ok(id);
-    // }
-
 
     // DELETE: api/courses/{id}
     [HttpDelete("{id}")]
@@ -505,59 +443,76 @@ public class CoursesManagerController : ControllerBase
             return BadRequest("Invalid Id.");
         }
 
-        // Перевіряємо, чи існує курс з таким Id
         var existingCourse = await _courseRepository.GetCourseByIdAsync(id);
         if (existingCourse == null)
         {
-            return NotFound("Курс не знайдено.");
+            return NotFound("Course not found");
         }
 
+        var studentRequestSuccess = false;
+        var instructorRequestSuccess = false;
+
+        // Перевірка, чи є студенти на курсі
         if (existingCourse.Students.Count > 0)
         {
             try
             {
+                // Використання HTTP-клієнта для видалення студентів з курсу
                 var s_response = await _studentManagerClient.DeleteStudentFromCourse(id, existingCourse.Students);
 
-                if (s_response.StatusCode != HttpStatusCode.OK)
+                if (s_response.StatusCode == HttpStatusCode.OK)
                 {
-                    return BadRequest("Can't delete students from the course");
+                    studentRequestSuccess = true;
+                }
+                else
+                {
+                    return BadRequest($"Failed to delete students from course. Status: {s_response.StatusCode}");
                 }
             }
             catch (BrokenCircuitException)
             {
-                // Circuit breaker is open, return 503 Service Unavailable
-                return StatusCode(503, "Student service is temporarily unavailable due to a circuit breaker.");
+                // Якщо спрацьовує Circuit Breaker, публікуємо повідомлення до RabbitMQ
+                _rabbitMQClient.PublishMessage("student-course-delete", id + "," + String.Join(",", existingCourse.Students));
+                Console.WriteLine("Send request to delete students from course to queue");
             }
         }
 
+        // Перевірка, чи є інструктори на курсі
         if (existingCourse.Instructors.Count > 0)
         {
             try
             {
+                // Використання HTTP-клієнта для видалення інструкторів з курсу
                 var i_response = await _instructorManagerClient.DeleteInstructorFromCourse(id, existingCourse.Instructors);
 
-                if (i_response.StatusCode != HttpStatusCode.OK)
+                if (i_response.StatusCode == HttpStatusCode.OK)
                 {
-                    return BadRequest("Can't delete instructors from the course");
+                    instructorRequestSuccess = true;
+                }
+                else
+                {
+                    return BadRequest($"Failed to delete instructors from course. Status: {i_response.StatusCode}");
                 }
             }
             catch (BrokenCircuitException)
             {
-                // Circuit breaker is open, return 503 Service Unavailable
-                return StatusCode(503, "Instructors service is temporarily unavailable due to a circuit breaker.");
+                // Якщо спрацьовує Circuit Breaker, публікуємо повідомлення до RabbitMQ
+                _rabbitMQClient.PublishMessage("instructor-course-delete", id + "," + String.Join(",", existingCourse.Instructors));
+                Console.WriteLine("Send request to delete instructors from course to queue");
             }
         }
 
-        // if (existingCourse.Tests.Count > 0)
-        // {
-        //     await _testManagerClient.DeleteTestFromCourse(id);
-        // }
+        // Перевіряємо, чи хоча б одне з HTTP-з'єднань було успішним.
+        // Якщо обидва з'єднання не вдалися, курс не буде видалено
+        if (!studentRequestSuccess && !instructorRequestSuccess)
+        {
+            return StatusCode(500, "Both student and instructor services are unavailable.");
+        }
 
+        // Якщо студенти і інструктори були видалені, видаляємо курс
         await _courseRepository.DeleteCourseAsync(id);
-
-        Console.WriteLine($"Procecced request to delete course {id} from {HttpContext.Connection.RemoteIpAddress}");
+        Console.WriteLine($"Processed request to delete course {id} from {HttpContext.Connection.RemoteIpAddress}");
 
         return NoContent();
     }
-
 }

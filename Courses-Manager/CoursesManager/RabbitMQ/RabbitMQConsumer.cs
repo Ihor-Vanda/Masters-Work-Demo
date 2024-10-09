@@ -2,9 +2,10 @@
 using System.Text;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
-using StudentManager.Repository;
+using CoursesManager.Repository;
+using MongoDB.Bson;
 
-namespace StudentManager.RabbitMQ;
+namespace CoursesManager.RabbitMQ;
 
 public class RabbitMQConsumer : BackgroundService
 {
@@ -28,13 +29,13 @@ public class RabbitMQConsumer : BackgroundService
         using var connection = factory.CreateConnection();
         using var channel = connection.CreateModel();
 
-        channel.QueueDeclare(queue: "student-course-delete",
+        channel.QueueDeclare(queue: "instructor-delete",
                              durable: false,
                              exclusive: false,
                              autoDelete: false,
                              arguments: null);
 
-        channel.QueueDeclare(queue: "student-course-add",
+        channel.QueueDeclare(queue: "student-delete",
                              durable: false,
                              exclusive: false,
                              autoDelete: false,
@@ -50,104 +51,109 @@ public class RabbitMQConsumer : BackgroundService
             var message = Encoding.UTF8.GetString(body);
             switch (routingKey)
             {
-                case "student-course-delete":
-                    await HandleDeleteCourseRequest(message);
+                case "instructor-delete":
+                    await HandleDeleteStudent(message);
                     break;
 
-                case "student-course-add":
-                    await HandleAddCourseRequest(message);
+                case "student-delete":
+                    await HandleDeleteInstructor(message);
                     break;
             }
         };
 
-        channel.BasicConsume(queue: "student-course-delete",
+        channel.BasicConsume(queue: "instructor-delete",
                              autoAck: true,
                              consumer: consumer);
 
-        channel.BasicConsume(queue: "student-course-add",
+        channel.BasicConsume(queue: "student-delete",
                              autoAck: true,
                              consumer: consumer);
 
         return Task.CompletedTask;
     }
 
-    private async Task HandleDeleteCourseRequest(string message)
+    private async Task HandleDeleteStudent(string id)
     {
-        if (string.IsNullOrWhiteSpace(message))
+        if (string.IsNullOrWhiteSpace(id))
         {
             Console.WriteLine("Received an empty delete course request.");
             return;
         }
 
         using var scope = _serviceProvider.CreateScope();
-        var studentRepository = scope.ServiceProvider.GetRequiredService<IRepository>();
+        var repo = scope.ServiceProvider.GetRequiredService<IRepository>();
 
-        var parts = message.Split(',');
-        var courseId = parts[0];
-        var studentsId = parts.ToList();
-        studentsId.RemoveAt(0);
-
-        var students = await studentRepository.GetAllStudents();
-
-        if (students != null && students.Count > 0)
+        if (!ObjectId.TryParse(id, out var _id))
         {
-            var list = students.FindAll(s => studentsId.Contains(s.Id));
+            Console.WriteLine("Ivalid id");
+            return;
+        }
+
+        var courses = await repo.GetAllCoursesAsync();
+
+        if (courses != null && courses.Count > 0)
+        {
+            var list = courses.FindAll(s => s.Students.Contains(id));
             if (list != null)
             {
                 var updateTasks = list
-                .Where(s => s.Courses.Contains(courseId))
-                .Select(async student =>
+                .Where(s => s.Students.Contains(id))
+                .Select(async course =>
                 {
-                    student.Courses.Remove(courseId);
-                    await studentRepository.UpdateStudentAsync(student.Id, student);
-                    Console.WriteLine($"Deleted course {courseId} from student {student.Id}.");
+                    course.Students.Remove(id);
+                    await repo.UpdateCourseAsync(course.Id, course);
+                    Console.WriteLine($"Deleted student {id} from course {course.Id}.");
                 });
 
                 await Task.WhenAll(updateTasks);
                 return;
             }
-            Console.WriteLine($"Students not found for deleting course {courseId}.");
+            Console.WriteLine($"Coures not found for deleting student {id}.");
         }
 
-        Console.WriteLine($"Can't get students from repo");
+        Console.WriteLine($"Can't get courses from repo");
     }
 
 
-    private async Task HandleAddCourseRequest(string message)
+    private async Task HandleDeleteInstructor(string id)
     {
-        if (string.IsNullOrWhiteSpace(message))
+        if (string.IsNullOrWhiteSpace(id))
         {
             Console.WriteLine("Received an empty delete course request.");
             return;
         }
 
         using var scope = _serviceProvider.CreateScope();
-        var studentRepository = scope.ServiceProvider.GetRequiredService<IRepository>();
+        var repo = scope.ServiceProvider.GetRequiredService<IRepository>();
 
-        var parts = message.Split(',');
-        var courseId = parts[0];
-        var studentsId = parts.ToList();
-        studentsId.RemoveAt(0);
-
-        var students = await studentRepository.GetAllStudents();
-
-        if (students != null)
+        if (!ObjectId.TryParse(id, out var _id))
         {
-            var list = students.FindAll(s => studentsId.Contains(s.Id));
+            Console.WriteLine("Ivalid id");
+            return;
+        }
+
+        var courses = await repo.GetAllCoursesAsync();
+
+        if (courses != null && courses.Count > 0)
+        {
+            var list = courses.FindAll(s => s.Instructors.Contains(id));
             if (list != null)
             {
-                var updateTasks = list.Select(async student =>
+                var updateTasks = list
+                .Where(s => s.Instructors.Contains(id))
+                .Select(async course =>
                 {
-                    student.Courses.Add(courseId);
-                    await studentRepository.UpdateStudentAsync(student.Id, student);
-                    Console.WriteLine($"Added course {courseId} to student {student.Id}.");
+                    course.Instructors.Remove(id);
+                    await repo.UpdateCourseAsync(course.Id, course);
+                    Console.WriteLine($"Deleted instructor {id} from course {course.Id}.");
                 });
 
                 await Task.WhenAll(updateTasks);
                 return;
             }
-            Console.WriteLine($"Students not found for adding course {courseId}.");
+            Console.WriteLine($"Coures not found for deleting instructor {id}.");
         }
-        Console.WriteLine($"Can't get students from repo");
+
+        Console.WriteLine($"Can't get courses from repo");
     }
 }

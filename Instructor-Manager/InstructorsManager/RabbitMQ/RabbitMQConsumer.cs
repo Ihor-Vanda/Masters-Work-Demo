@@ -2,9 +2,9 @@
 using System.Text;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
-using StudentManager.Repository;
+using InstructorsManager.Repository;
 
-namespace StudentManager.RabbitMQ;
+namespace InstructorsManager.RabbitMQ;
 
 public class RabbitMQConsumer : BackgroundService
 {
@@ -28,13 +28,13 @@ public class RabbitMQConsumer : BackgroundService
         using var connection = factory.CreateConnection();
         using var channel = connection.CreateModel();
 
-        channel.QueueDeclare(queue: "student-course-delete",
+        channel.QueueDeclare(queue: "instructor-course-delete",
                              durable: false,
                              exclusive: false,
                              autoDelete: false,
                              arguments: null);
 
-        channel.QueueDeclare(queue: "student-course-add",
+        channel.QueueDeclare(queue: "instructor-course-add",
                              durable: false,
                              exclusive: false,
                              autoDelete: false,
@@ -50,21 +50,21 @@ public class RabbitMQConsumer : BackgroundService
             var message = Encoding.UTF8.GetString(body);
             switch (routingKey)
             {
-                case "student-course-delete":
+                case "instructor-course-delete":
                     await HandleDeleteCourseRequest(message);
                     break;
 
-                case "student-course-add":
+                case "instructor-course-add":
                     await HandleAddCourseRequest(message);
                     break;
             }
         };
 
-        channel.BasicConsume(queue: "student-course-delete",
+        channel.BasicConsume(queue: "instructor-course-delete",
                              autoAck: true,
                              consumer: consumer);
 
-        channel.BasicConsume(queue: "student-course-add",
+        channel.BasicConsume(queue: "instructor-course-add",
                              autoAck: true,
                              consumer: consumer);
 
@@ -80,36 +80,42 @@ public class RabbitMQConsumer : BackgroundService
         }
 
         using var scope = _serviceProvider.CreateScope();
-        var studentRepository = scope.ServiceProvider.GetRequiredService<IRepository>();
+        var repo = scope.ServiceProvider.GetRequiredService<IRepository>();
 
         var parts = message.Split(',');
-        var courseId = parts[0];
-        var studentsId = parts.ToList();
-        studentsId.RemoveAt(0);
-
-        var students = await studentRepository.GetAllStudents();
-
-        if (students != null && students.Count > 0)
+        if (parts.Length < 2)
         {
-            var list = students.FindAll(s => studentsId.Contains(s.Id));
+            Console.WriteLine("Received an empty delete course request.");
+            return;
+        }
+
+        var courseId = parts[0];
+        var instructorIds = parts.ToList();
+        instructorIds.RemoveAt(0);
+
+        var instructors = await repo.GetAllInstructors();
+
+        if (instructors != null && instructors.Count > 0)
+        {
+            var list = instructors.FindAll(s => instructorIds.Contains(s.Id));
             if (list != null)
             {
                 var updateTasks = list
                 .Where(s => s.Courses.Contains(courseId))
-                .Select(async student =>
+                .Select(async instructor =>
                 {
-                    student.Courses.Remove(courseId);
-                    await studentRepository.UpdateStudentAsync(student.Id, student);
-                    Console.WriteLine($"Deleted course {courseId} from student {student.Id}.");
+                    instructor.Courses.Remove(courseId);
+                    await repo.UpdateInstructor(instructor.Id, instructor);
+                    Console.WriteLine($"Deleted course {courseId} from instructor {instructor.Id}.");
                 });
 
                 await Task.WhenAll(updateTasks);
                 return;
             }
-            Console.WriteLine($"Students not found for deleting course {courseId}.");
+            Console.WriteLine($"Instructors not found for deleting course {courseId}.");
         }
 
-        Console.WriteLine($"Can't get students from repo");
+        Console.WriteLine($"Can't get instructors from repo");
     }
 
 
@@ -122,32 +128,38 @@ public class RabbitMQConsumer : BackgroundService
         }
 
         using var scope = _serviceProvider.CreateScope();
-        var studentRepository = scope.ServiceProvider.GetRequiredService<IRepository>();
+        var repo = scope.ServiceProvider.GetRequiredService<IRepository>();
 
         var parts = message.Split(',');
-        var courseId = parts[0];
-        var studentsId = parts.ToList();
-        studentsId.RemoveAt(0);
-
-        var students = await studentRepository.GetAllStudents();
-
-        if (students != null)
+        if (parts.Length < 2)
         {
-            var list = students.FindAll(s => studentsId.Contains(s.Id));
+            Console.WriteLine("Received an empty delete course request.");
+            return;
+        }
+
+        var courseId = parts[0];
+        var instructorIds = parts.ToList();
+        instructorIds.RemoveAt(0);
+
+        var instructors = await repo.GetAllInstructors();
+
+        if (instructors != null)
+        {
+            var list = instructors.FindAll(s => instructorIds.Contains(s.Id));
             if (list != null)
             {
-                var updateTasks = list.Select(async student =>
+                var updateTasks = list.Select(async instructor =>
                 {
-                    student.Courses.Add(courseId);
-                    await studentRepository.UpdateStudentAsync(student.Id, student);
-                    Console.WriteLine($"Added course {courseId} to student {student.Id}.");
+                    instructor.Courses.Add(courseId);
+                    await repo.UpdateInstructor(instructor.Id, instructor);
+                    Console.WriteLine($"Added course {courseId} to instructor {instructor.Id}.");
                 });
 
                 await Task.WhenAll(updateTasks);
                 return;
             }
-            Console.WriteLine($"Students not found for adding course {courseId}.");
+            Console.WriteLine($"Instructors not found for adding course {courseId}.");
         }
-        Console.WriteLine($"Can't get students from repo");
+        Console.WriteLine($"Can't get Instructors from repo");
     }
 }

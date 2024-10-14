@@ -1,3 +1,5 @@
+using MongoDB.Driver;
+
 namespace StudentManager.Repository;
 
 public class StudentRepository : IRepository
@@ -14,7 +16,7 @@ public class StudentRepository : IRepository
         return await _mongoDBRepository.GetAllStudents();
     }
 
-    public async Task<Student?> GetStudentByIdAsync(string id)
+    public async Task<Student> GetStudentByIdAsync(string id)
     {
         return await _mongoDBRepository.GetStudentByIdAsync(id);
     }
@@ -24,13 +26,28 @@ public class StudentRepository : IRepository
         await _mongoDBRepository.AddStudentAsync(student);
     }
 
-    public async Task UpdateStudentAsync(string studentId, Student student)
+    public async Task<UpdateResult> UpdateAsync(string id, UpdateDefinition<Student> updateDefinition)
     {
-        await _mongoDBRepository.UpdateStudentAsync(studentId, student);
+        return await _mongoDBRepository.UpdateAsync(id, updateDefinition);
     }
 
-    public async Task DeleteStudentAsync(string studentId)
+    public async Task<UpdateResult> UpdateStudentAsync(string studentId, Student student)
     {
-        await _mongoDBRepository.DeleteStudentAsync(studentId);
+        return await _mongoDBRepository.UpdateStudentAsync(studentId, student);
+    }
+
+    public async Task<UpdateResult> AddCourseAsync(string studentId, string courseId)
+    {
+        return await _mongoDBRepository.AddCourseAsync(studentId, courseId);
+    }
+
+    public async Task<UpdateResult> DeleteCourseAsync(string studentId, string courseId)
+    {
+        return await _mongoDBRepository.DeleteCourseAsync(studentId, courseId);
+    }
+
+    public async Task<DeleteResult> DeleteStudentAsync(string studentId)
+    {
+        return await _mongoDBRepository.DeleteStudentAsync(studentId);
     }
 }

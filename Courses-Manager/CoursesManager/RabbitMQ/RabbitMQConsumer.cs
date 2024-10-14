@@ -1,4 +1,3 @@
-
 using System.Text;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
@@ -10,14 +9,13 @@ namespace CoursesManager.RabbitMQ;
 public class RabbitMQConsumer : BackgroundService
 {
     private readonly IServiceProvider _serviceProvider;
+    private IConnection _connection;
+    private IModel _channel;
 
     public RabbitMQConsumer(IServiceProvider serviceProvider)
     {
         _serviceProvider = serviceProvider;
-    }
 
-    protected override Task ExecuteAsync(CancellationToken stoppingToken)
-    {
         var factory = new ConnectionFactory()
         {
             HostName = "rabbitmq",
@@ -26,22 +24,25 @@ public class RabbitMQConsumer : BackgroundService
             Password = "password"
         };
 
-        using var connection = factory.CreateConnection();
-        using var channel = connection.CreateModel();
+        _connection = factory.CreateConnection();
+        _channel = _connection.CreateModel();
+    }
 
-        channel.QueueDeclare(queue: "instructor-delete",
+    protected override Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        _channel.QueueDeclare(queue: "instructor-delete",
                              durable: false,
                              exclusive: false,
                              autoDelete: false,
                              arguments: null);
 
-        channel.QueueDeclare(queue: "student-delete",
+        _channel.QueueDeclare(queue: "student-delete",
                              durable: false,
                              exclusive: false,
                              autoDelete: false,
                              arguments: null);
 
-        var consumer = new EventingBasicConsumer(channel);
+        var consumer = new EventingBasicConsumer(_channel);
 
         consumer.Received += async (model, ea) =>
         {
@@ -52,20 +53,20 @@ public class RabbitMQConsumer : BackgroundService
             switch (routingKey)
             {
                 case "instructor-delete":
-                    await HandleDeleteStudent(message);
+                    await HandleDeleteInstructor(message);
                     break;
 
                 case "student-delete":
-                    await HandleDeleteInstructor(message);
+                    await HandleDeleteStudent(message);
                     break;
             }
         };
 
-        channel.BasicConsume(queue: "instructor-delete",
+        _channel.BasicConsume(queue: "instructor-delete",
                              autoAck: true,
                              consumer: consumer);
 
-        channel.BasicConsume(queue: "student-delete",
+        _channel.BasicConsume(queue: "student-delete",
                              autoAck: true,
                              consumer: consumer);
 
@@ -76,7 +77,7 @@ public class RabbitMQConsumer : BackgroundService
     {
         if (string.IsNullOrWhiteSpace(id))
         {
-            Console.WriteLine("Received an empty delete course request.");
+            Console.WriteLine("Received an empty delete student request.");
             return;
         }
 
@@ -85,41 +86,46 @@ public class RabbitMQConsumer : BackgroundService
 
         if (!ObjectId.TryParse(id, out var _id))
         {
-            Console.WriteLine("Ivalid id");
+            Console.WriteLine("Invalid id");
             return;
         }
 
         var courses = await repo.GetAllCoursesAsync();
 
-        if (courses != null && courses.Count > 0)
+        if (courses == null || courses.Count == 0)
         {
-            var list = courses.FindAll(s => s.Students.Contains(id));
-            if (list != null)
-            {
-                var updateTasks = list
-                .Where(s => s.Students.Contains(id))
-                .Select(async course =>
-                {
-                    course.Students.Remove(id);
-                    await repo.UpdateCourseAsync(course.Id, course);
-                    Console.WriteLine($"Deleted student {id} from course {course.Id}.");
-                });
-
-                await Task.WhenAll(updateTasks);
-                return;
-            }
-            Console.WriteLine($"Coures not found for deleting student {id}.");
+            Console.WriteLine("Can't get courses from repo");
+            return;
         }
+        var list = courses.FindAll(s => s.Students.Contains(id));
+        if (list == null || list.Count == 0)
+        {
+            Console.WriteLine($"Course not found for deleting student {id}.");
+            return;
+        }
+        for (int i = 0; i < list.Count; i++)
+        {
+            var course = list[i];
 
-        Console.WriteLine($"Can't get courses from repo");
+            if (course.Students.Contains(course.Id))
+            {
+                var res = await repo.RemoveStudentAsync(course.Id, id);
+
+                Console.WriteLine($"Updated course {course.Id} - Success: {res.ModifiedCount > 0}");
+                Console.WriteLine($"Deleted student {id} from course {course.Id}.");
+            }
+            else
+            {
+                Console.WriteLine($"The course {course.Id} does not have student {id}.");
+            }
+        }
     }
-
 
     private async Task HandleDeleteInstructor(string id)
     {
         if (string.IsNullOrWhiteSpace(id))
         {
-            Console.WriteLine("Received an empty delete course request.");
+            Console.WriteLine("Received an empty delete instructor request.");
             return;
         }
 
@@ -128,32 +134,46 @@ public class RabbitMQConsumer : BackgroundService
 
         if (!ObjectId.TryParse(id, out var _id))
         {
-            Console.WriteLine("Ivalid id");
+            Console.WriteLine("Invalid id");
             return;
         }
 
         var courses = await repo.GetAllCoursesAsync();
 
-        if (courses != null && courses.Count > 0)
+        if (courses == null || courses.Count == 0)
         {
-            var list = courses.FindAll(s => s.Instructors.Contains(id));
-            if (list != null)
-            {
-                var updateTasks = list
-                .Where(s => s.Instructors.Contains(id))
-                .Select(async course =>
-                {
-                    course.Instructors.Remove(id);
-                    await repo.UpdateCourseAsync(course.Id, course);
-                    Console.WriteLine($"Deleted instructor {id} from course {course.Id}.");
-                });
-
-                await Task.WhenAll(updateTasks);
-                return;
-            }
-            Console.WriteLine($"Coures not found for deleting instructor {id}.");
+            Console.WriteLine("Can't get courses from repo");
+            return;
+        }
+        var list = courses.FindAll(s => s.Instructors.Contains(id));
+        if (list == null || list.Count == 0)
+        {
+            Console.WriteLine($"Course not found for deleting instructor {id}.");
+            return;
         }
 
-        Console.WriteLine($"Can't get courses from repo");
+        for (int i = 0; i < list.Count; i++)
+        {
+            var course = list[i];
+
+            if (course.Instructors.Contains(course.Id))
+            {
+                var res = await repo.RemoveInstructorAsync(course.Id, id);
+
+                Console.WriteLine($"Updated course {course.Id} - Success: {res.ModifiedCount > 0}");
+                Console.WriteLine($"Deleted instructor {id} from course {course.Id}.");
+            }
+            else
+            {
+                Console.WriteLine($"The course {course.Id} does not have instructor {id}.");
+            }
+        }
+    }
+
+    public override void Dispose()
+    {
+        _channel.Close();
+        _connection.Close();
+        base.Dispose();
     }
 }

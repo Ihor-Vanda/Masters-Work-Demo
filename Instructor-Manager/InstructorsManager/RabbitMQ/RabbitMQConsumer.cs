@@ -1,165 +1,167 @@
-
 using System.Text;
+using System.Text.Json;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using InstructorsManager.Repository;
 
-namespace InstructorsManager.RabbitMQ;
-
-public class RabbitMQConsumer : BackgroundService
+namespace InstructorsManager.RabbitMQ
 {
-    private readonly IServiceProvider _serviceProvider;
-
-    public RabbitMQConsumer(IServiceProvider serviceProvider)
+    public class RabbitMQConsumer : BackgroundService
     {
-        _serviceProvider = serviceProvider;
-    }
+        private readonly IServiceProvider _serviceProvider;
+        private readonly IConnection _connection;
+        private readonly IModel _channel;
+        private readonly SemaphoreSlim _semaphore = new SemaphoreSlim(1, 1); // Семафор для контролю обробки
 
-    protected override Task ExecuteAsync(CancellationToken stoppingToken)
-    {
-        var factory = new ConnectionFactory()
+
+        public RabbitMQConsumer(IServiceProvider serviceProvider)
         {
-            HostName = "rabbitmq",
-            Port = 5672,
-            UserName = "user",
-            Password = "password"
-        };
+            _serviceProvider = serviceProvider;
 
-        using var connection = factory.CreateConnection();
-        using var channel = connection.CreateModel();
-
-        channel.QueueDeclare(queue: "instructor-course-delete",
-                             durable: false,
-                             exclusive: false,
-                             autoDelete: false,
-                             arguments: null);
-
-        channel.QueueDeclare(queue: "instructor-course-add",
-                             durable: false,
-                             exclusive: false,
-                             autoDelete: false,
-                             arguments: null);
-
-        var consumer = new EventingBasicConsumer(channel);
-
-        consumer.Received += async (model, ea) =>
-        {
-            var body = ea.Body.ToArray();
-            var routingKey = ea.RoutingKey;
-
-            var message = Encoding.UTF8.GetString(body);
-            switch (routingKey)
+            var factory = new ConnectionFactory()
             {
-                case "instructor-course-delete":
-                    await HandleDeleteCourseRequest(message);
-                    break;
+                HostName = "rabbitmq",
+                Port = 5672,
+                UserName = "user",
+                Password = "password"
+            };
 
-                case "instructor-course-add":
-                    await HandleAddCourseRequest(message);
-                    break;
-            }
-        };
-
-        channel.BasicConsume(queue: "instructor-course-delete",
-                             autoAck: true,
-                             consumer: consumer);
-
-        channel.BasicConsume(queue: "instructor-course-add",
-                             autoAck: true,
-                             consumer: consumer);
-
-        return Task.CompletedTask;
-    }
-
-    private async Task HandleDeleteCourseRequest(string message)
-    {
-        if (string.IsNullOrWhiteSpace(message))
-        {
-            Console.WriteLine("Received an empty delete course request.");
-            return;
+            _connection = factory.CreateConnection();
+            _channel = _connection.CreateModel();
         }
 
-        using var scope = _serviceProvider.CreateScope();
-        var repo = scope.ServiceProvider.GetRequiredService<IRepository>();
-
-        var parts = message.Split(',');
-        if (parts.Length < 2)
+        protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            Console.WriteLine("Received an empty delete course request.");
-            return;
-        }
+            _channel.QueueDeclare(queue: "instructor-course",
+                                 durable: false,
+                                 exclusive: false,
+                                 autoDelete: false,
+                                 arguments: null);
 
-        var courseId = parts[0];
-        var instructorIds = parts.ToList();
-        instructorIds.RemoveAt(0);
-
-        var instructors = await repo.GetAllInstructors();
-
-        if (instructors != null && instructors.Count > 0)
-        {
-            var list = instructors.FindAll(s => instructorIds.Contains(s.Id));
-            if (list != null)
+            var consumer = new EventingBasicConsumer(_channel);
+            consumer.Received += async (model, ea) =>
             {
-                var updateTasks = list
-                .Where(s => s.Courses.Contains(courseId))
-                .Select(async instructor =>
+                await _semaphore.WaitAsync();
+                try
                 {
-                    instructor.Courses.Remove(courseId);
-                    await repo.UpdateInstructor(instructor.Id, instructor);
-                    Console.WriteLine($"Deleted course {courseId} from instructor {instructor.Id}.");
-                });
+                    var body = ea.Body.ToArray();
+                    var messageJson = Encoding.UTF8.GetString(body);
+                    var message = JsonSerializer.Deserialize<RabbitMQMessage>(messageJson);
 
-                await Task.WhenAll(updateTasks);
+                    if (message == null || string.IsNullOrEmpty(message.Type) || string.IsNullOrEmpty(message.CourseId) || message.EntityIds == null || message.EntityIds.Count == 0)
+                    {
+                        Console.WriteLine("Invalid message received.");
+                        _channel.BasicAck(ea.DeliveryTag, false);
+                        return;
+                    }
+
+                    try
+                    {
+                        switch (message.Type)
+                        {
+                            case "add":
+                                await HandleAddCourseRequest(message);
+                                break;
+                            case "delete":
+                                await HandleDeleteCourseRequestAsync(message);
+                                break;
+                            default:
+                                Console.WriteLine($"Unknown message type: {message.Type}");
+                                break;
+                        }
+                    }
+                    finally
+                    {
+                        _channel.BasicAck(ea.DeliveryTag, false);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error processing message: {ex.Message}");
+                }
+                finally
+                {
+                    _semaphore.Release();
+                }
+            };
+
+            _channel.BasicConsume(queue: "instructor-course",
+                                 autoAck: false,
+                                 consumer: consumer);
+
+            await Task.CompletedTask;
+        }
+
+        private async Task HandleDeleteCourseRequestAsync(RabbitMQMessage message)
+        {
+            using var scope = _serviceProvider.CreateScope();
+            var repo = scope.ServiceProvider.GetRequiredService<IRepository>();
+
+            var instructors = await repo.GetInstructorsAsync();
+
+            if (instructors == null || instructors.Count == 0)
+            {
+                Console.WriteLine("Can't get instructors from repo");
                 return;
             }
-            Console.WriteLine($"Instructors not found for deleting course {courseId}.");
-        }
 
-        Console.WriteLine($"Can't get instructors from repo");
-    }
+            var list = instructors.FindAll(s => message.EntityIds.Contains(s.Id));
 
-
-    private async Task HandleAddCourseRequest(string message)
-    {
-        if (string.IsNullOrWhiteSpace(message))
-        {
-            Console.WriteLine("Received an empty delete course request.");
-            return;
-        }
-
-        using var scope = _serviceProvider.CreateScope();
-        var repo = scope.ServiceProvider.GetRequiredService<IRepository>();
-
-        var parts = message.Split(',');
-        if (parts.Length < 2)
-        {
-            Console.WriteLine("Received an empty delete course request.");
-            return;
-        }
-
-        var courseId = parts[0];
-        var instructorIds = parts.ToList();
-        instructorIds.RemoveAt(0);
-
-        var instructors = await repo.GetAllInstructors();
-
-        if (instructors != null)
-        {
-            var list = instructors.FindAll(s => instructorIds.Contains(s.Id));
-            if (list != null)
+            if (list == null || list.Count == 0)
             {
-                var updateTasks = list.Select(async instructor =>
-                {
-                    instructor.Courses.Add(courseId);
-                    await repo.UpdateInstructor(instructor.Id, instructor);
-                    Console.WriteLine($"Added course {courseId} to instructor {instructor.Id}.");
-                });
-
-                await Task.WhenAll(updateTasks);
+                Console.WriteLine($"Instructors not found for deleting course {message.CourseId}.");
                 return;
             }
-            Console.WriteLine($"Instructors not found for adding course {courseId}.");
+
+            foreach (var instructor in list)
+            {
+                if (instructor.Courses.Contains(message.CourseId))
+                {
+                    var res = await repo.DeleteCourseAsync(instructor.Id, message.CourseId);
+                    Console.WriteLine($"Updated instructor {instructor.Id} - Success: {res.ModifiedCount > 0}");
+                    Console.WriteLine($"Deleted course {message.CourseId} from instructor {instructor.Id}.");
+                }
+                else
+                {
+                    Console.WriteLine($"The instructor {instructor.Id} does not have course {message.CourseId}");
+                }
+            }
         }
-        Console.WriteLine($"Can't get Instructors from repo");
+
+        private async Task HandleAddCourseRequest(RabbitMQMessage message)
+        {
+            using var scope = _serviceProvider.CreateScope();
+            var repo = scope.ServiceProvider.GetRequiredService<IRepository>();
+
+            var instructors = await repo.GetInstructorsAsync();
+
+            if (instructors == null || instructors.Count == 0)
+            {
+                Console.WriteLine("Can't get instructors from repo");
+                return;
+            }
+
+            var list = instructors.FindAll(s => message.EntityIds.Contains(s.Id));
+
+            if (list == null || list.Count == 0)
+            {
+                Console.WriteLine($"Instructors not found for adding course {message.CourseId}.");
+                return;
+            }
+
+            foreach (var instructor in list)
+            {
+                if (!instructor.Courses.Contains(message.CourseId))
+                {
+                    var res = await repo.AddCourseAsync(instructor.Id, message.CourseId);
+                    Console.WriteLine($"Updated instructor {instructor.Id} - Success: {res.ModifiedCount > 0}");
+                    Console.WriteLine($"Add course {message.CourseId} to instructor {instructor.Id}.");
+                }
+                else
+                {
+                    Console.WriteLine($"The instructor {instructor.Id} already has course {message.CourseId}.");
+                }
+            }
+        }
     }
 }

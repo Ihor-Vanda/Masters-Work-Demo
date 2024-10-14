@@ -128,26 +128,12 @@ public class StudentManagerController : ControllerBase
     }
 
     [HttpPut("courses/{id}/add")]
-    public async Task<ActionResult> AddCoursesToStudent(string id, [FromBody] List<string> studentIds)
+    public async Task<ActionResult> AddCourseToStudents(string id, [FromBody] List<string> studentIds)
     {
         if (string.IsNullOrWhiteSpace(id) || studentIds == null || studentIds.Count == 0)
         {
             return BadRequest("Invalid request");
         }
-
-        // try
-        // {
-        //     var courseExists = await _courseServiceClient.CheckCourseExists(id);
-        //     if (!courseExists)
-        //     {
-        //         return BadRequest($"Course with id {id} does not exist.");
-        //     }
-        // }
-        // catch (BrokenCircuitException)
-        // {
-        //     // Circuit breaker is open, return 503 Service Unavailable
-        //     return StatusCode(503, "Course service is temporarily unavailable due to a circuit breaker.");
-        // }
 
         var studentsList = new List<Student>();
         foreach (var studentId in studentIds)
@@ -160,16 +146,14 @@ public class StudentManagerController : ControllerBase
             studentsList.Add(student);
         }
 
-        // Add course to each student
-        var updateTasks = studentsList
-            .Where(std => !std.Courses.Contains(id))
-            .Select(std =>
-            {
-                std.Courses.Add(id);
-                return _studentRepository.UpdateStudentAsync(std.Id, std);
-            });
+        for (int i = 0; i < studentsList.Count; i++)
+        {
+            var student = studentsList[i];
 
-        await Task.WhenAll(updateTasks);
+            var res = await _studentRepository.AddCourseAsync(student.Id, id);
+
+            Console.WriteLine($"Updated student {student.Id} - Success: {res.ModifiedCount > 0}");
+        }
 
         Console.WriteLine($"Processed request adding course {id} to students {string.Join(", ", studentIds)} from {HttpContext.Connection.RemoteIpAddress}");
 
@@ -184,26 +168,25 @@ public class StudentManagerController : ControllerBase
             return BadRequest("Invalid request");
         }
 
-        // var courseExists = await _courseServiceClient.CheckCourseExists(id);
-        // if (!courseExists)
-        // {
-        //     return BadRequest($"Course with id {id} does not exist.");
-        // }
-
-        var studentsList = await _studentRepository.GetAllStudents();
-        studentsList.FindAll(s => studentIds.Contains(s.Id));
-        if (studentsList == null || studentsList.Count == 0)
+        var studentsList = new List<Student>();
+        foreach (var studentId in studentIds)
         {
-            return BadRequest("The specified students do not exist.");
+            var student = await _studentRepository.GetStudentByIdAsync(studentId);
+            if (student == null)
+            {
+                return BadRequest($"Student with id {studentId} does not exist.");
+            }
+            studentsList.Add(student);
         }
 
-        var updateTasks = studentsList.Select(std =>
+        for (int i = 0; i < studentsList.Count; i++)
         {
-            std.Courses.Remove(id);
-            return _studentRepository.UpdateStudentAsync(std.Id, std);
-        });
+            var student = studentsList[i];
 
-        await Task.WhenAll(updateTasks);
+            var res = await _studentRepository.DeleteCourseAsync(student.Id, id);
+
+            Console.WriteLine($"Updated student {student.Id} - Success: {res.ModifiedCount > 0}");
+        }
 
         Console.WriteLine($"Processed request deleting course {id} from students {string.Join(", ", studentIds)} from {HttpContext.Connection.RemoteIpAddress}");
 
@@ -225,34 +208,34 @@ public class StudentManagerController : ControllerBase
             return NotFound("The student doesn't found");
         }
 
-        if (student.Courses.Count > 0)
+        if (student.Courses.Count == 0)
         {
-            try
-            {
-                var response = await _courseServiceClient.DeleteStudentFromCourses(id);
+            await _studentRepository.DeleteStudentAsync(id);
+            Console.WriteLine($"Processed request deleting course {id} from students {string.Join(", ", id)} from {HttpContext.Connection.RemoteIpAddress}");
 
-                if (response != System.Net.HttpStatusCode.OK)
-                {
-                    return StatusCode(503,"Remote service temporaly unavaible");
-                }
-
-                await _studentRepository.DeleteStudentAsync(id);
-
-                Console.WriteLine($"Procecced request to delete student {id} from {HttpContext.Connection.RemoteIpAddress}");
-
-                return NoContent();
-            }
-            catch (BrokenCircuitException)
-            {
-                _rabbitMQClient.PublishMessage("student-delete", id);
-                await _studentRepository.DeleteStudentAsync(id);
-                return StatusCode(503,"Sending request to delete student to queue");
-            }
+            return NoContent();
         }
 
-        await _studentRepository.DeleteStudentAsync(id);
-        Console.WriteLine($"Processed request deleting course {id} from students {string.Join(", ", id)} from {HttpContext.Connection.RemoteIpAddress}");
+        try
+        {
+            var response = await _courseServiceClient.DeleteStudentFromCourses(id);
 
-        return NoContent();
+            if (response != System.Net.HttpStatusCode.OK)
+            {
+                return StatusCode(503, "Remote service temporaly unavaible");
+            }
+
+            await _studentRepository.DeleteStudentAsync(id);
+
+            Console.WriteLine($"Procecced request to delete student {id} from {HttpContext.Connection.RemoteIpAddress}");
+
+            return NoContent();
+        }
+        catch (BrokenCircuitException)
+        {
+            _rabbitMQClient.PublishMessage("student-delete", id);
+            await _studentRepository.DeleteStudentAsync(id);
+            return StatusCode(200, "Sending request to delete student to queue");
+        }
     }
 }

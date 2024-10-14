@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text.Json;
 using CoursesManager.Clients;
 using CoursesManager.DTO;
 using CoursesManager.RabbitMQ;
@@ -195,10 +196,17 @@ public class CoursesManagerController : ControllerBase
         }
         catch (BrokenCircuitException)
         {
-            _rabbitMQClient.PublishMessage("student-course-add", id + "," + String.Join(",", students));
+            var message = new RabbitMQMessage
+            {
+                Type = "add",
+                CourseId = course.Id,
+                EntityIds = students
+            };
+
+            _rabbitMQClient.PublishMessage("student-course", JsonSerializer.Serialize(message));
             course.Students.AddRange(students);
             await _courseRepository.UpdateCourseAsync(id, course);
-            return StatusCode(503, "Sending request add students to course to queue");
+            return StatusCode(200, "Sending request add students to course to queue");
         }
 
         return Ok(course);
@@ -251,10 +259,17 @@ public class CoursesManagerController : ControllerBase
         }
         catch (BrokenCircuitException)
         {
-            _rabbitMQClient.PublishMessage("student-course-delete", id + "," + String.Join(",", students));
+            var message = new RabbitMQMessage
+            {
+                Type = "delete",
+                CourseId = course.Id,
+                EntityIds = students
+            };
+
+            _rabbitMQClient.PublishMessage("student-course", JsonSerializer.Serialize(message));
             course.Students.RemoveAll(students.Contains);
             await _courseRepository.UpdateCourseAsync(id, course);
-            return StatusCode(503, "Sending request add students to course to queue");
+            return StatusCode(200, "Sending request delete students to course to queue");
         }
 
         return Ok(course);
@@ -281,14 +296,14 @@ public class CoursesManagerController : ControllerBase
             return Ok(id);
         }
 
-        var updateTasks = coursesList
-        .Select(async x =>
+        for (int i = 0; i < coursesList.Count; i++)
         {
-            x.Students.Remove(id);
-            await _courseRepository.UpdateCourseAsync(x.Id, x);
-        });
+            var course = coursesList[i];
+            var res = await _courseRepository.RemoveStudentAsync(course.Id, id);
 
-        await Task.WhenAll(updateTasks);
+            Console.WriteLine($"Updated course {course.Id} - Success: {res.ModifiedCount > 0}");
+            Console.WriteLine($"Deleted student {id} from course {course.Id}");
+        }
 
         return Ok(id);
     }
@@ -321,31 +336,39 @@ public class CoursesManagerController : ControllerBase
         try
         {
             var service_response = await _instructorManagerClient.AddInstructorToCourse(id, instructors);
-            if (service_response.StatusCode == HttpStatusCode.OK)
+            if (service_response.StatusCode != HttpStatusCode.OK)
             {
-                var instructorsList = await service_response.Content.ReadFromJsonAsync<List<string>>();
-
-                if (instructorsList == null)
-                {
-                    return Ok("Instructors already have the course");
-                }
-
-                course.Instructors.AddRange(instructorsList);
-                await _courseRepository.UpdateCourseAsync(id, course);
-
-                Console.WriteLine($"Procecced request to add instructors to course {id} from {HttpContext.Connection.RemoteIpAddress}");
-                return Ok(course);
+                return StatusCode(503, "Remote service temporaly unavaible");
             }
+
+            var instructorsList = await service_response.Content.ReadFromJsonAsync<List<string>>();
+
+            if (instructorsList == null)
+            {
+                return Ok("Instructors already have the course");
+            }
+
+            course.Instructors.AddRange(instructorsList);
+            await _courseRepository.UpdateCourseAsync(id, course);
+
+            Console.WriteLine($"Procecced request to add instructors to course {id} from {HttpContext.Connection.RemoteIpAddress}");
+            return Ok(course);
         }
         catch (BrokenCircuitException)
         {
-            _rabbitMQClient.PublishMessage("instructor-course-add", id + "," + String.Join(",", instructors));
-            course.Students.AddRange(instructors);
-            await _courseRepository.UpdateCourseAsync(id, course);
-            return StatusCode(503, "Sending request add instructors to course to queue");
-        }
+            var message = new RabbitMQMessage
+            {
+                Type = "add",
+                CourseId = course.Id,
+                EntityIds = instructors
+            };
 
-        return Ok(course);
+            _rabbitMQClient.PublishMessage("instructor-course", JsonSerializer.Serialize(message));
+
+            course.Instructors.AddRange(instructors);
+            await _courseRepository.UpdateCourseAsync(id, course);
+            return StatusCode(200, "Sending request add instructors to course to queue");
+        }
     }
 
     [HttpPut("/instructors/{id}/delete")]
@@ -375,31 +398,41 @@ public class CoursesManagerController : ControllerBase
         try
         {
             var service_response = await _instructorManagerClient.DeleteInstructorFromCourse(id, instructors);
-            if (service_response.StatusCode == HttpStatusCode.OK)
+            if (service_response.StatusCode != HttpStatusCode.OK)
             {
-                var instructorsList = await service_response.Content.ReadFromJsonAsync<List<string>>();
+                return StatusCode(503, "Remote service temporaly unavaible");
 
-                if (instructorsList == null)
-                {
-                    return Ok("The Instructors don't have the course");
-                }
-
-                course.Instructors.RemoveAll(instructorsList.Contains);
-                await _courseRepository.UpdateCourseAsync(id, course);
-
-                Console.WriteLine($"Procecced request to delete instructors from course {id} from {HttpContext.Connection.RemoteIpAddress}");
-                return Ok(course);
             }
+
+            var instructorsList = await service_response.Content.ReadFromJsonAsync<List<string>>();
+
+            if (instructorsList == null)
+            {
+                return Ok("The Instructors don't have the course");
+            }
+
+            course.Instructors.RemoveAll(instructorsList.Contains);
+            await _courseRepository.UpdateCourseAsync(id, course);
+
+            Console.WriteLine($"Procecced request to delete instructors from course {id} from {HttpContext.Connection.RemoteIpAddress}");
+            return Ok(course);
+
         }
         catch (BrokenCircuitException)
         {
-            _rabbitMQClient.PublishMessage("instructor-course-delete", id + "," + String.Join(",", instructors));
-            course.Students.RemoveAll(instructors.Contains);
-            await _courseRepository.UpdateCourseAsync(id, course);
-            return StatusCode(503, "Sending request delete instructors from course to queue");
-        }
+            var message = new RabbitMQMessage
+            {
+                Type = "delete",
+                CourseId = course.Id,
+                EntityIds = instructors
+            };
 
-        return Ok(course);
+            _rabbitMQClient.PublishMessage("instructor-course", JsonSerializer.Serialize(message));
+
+            course.Instructors.RemoveAll(instructors.Contains);
+            await _courseRepository.UpdateCourseAsync(id, course);
+            return StatusCode(200, "Sending request delete instructors from course to queue");
+        }
     }
 
     [HttpPut("/instructors/{id}")]
@@ -423,13 +456,15 @@ public class CoursesManagerController : ControllerBase
             return Ok(id);
         }
 
-        var updateTasks = coursesList.Select(async x =>
+        for (int i = 0; i < coursesList.Count; i++)
         {
-            x.Instructors.Remove(id);
-            await _courseRepository.UpdateCourseAsync(x.Id, x);
-        });
+            var course = coursesList[i];
 
-        await Task.WhenAll(updateTasks);
+            var res = await _courseRepository.RemoveInstructorAsync(course.Id, id);
+
+            Console.WriteLine($"Updated course {course.Id} - Success: {res.ModifiedCount > 0}");
+            Console.WriteLine($"Deleted instructor {id} from course {course.Id}");
+        }
 
         return Ok(id);
     }
@@ -452,64 +487,80 @@ public class CoursesManagerController : ControllerBase
         var studentRequestSuccess = false;
         var instructorRequestSuccess = false;
 
-        // Перевірка, чи є студенти на курсі
-        if (existingCourse.Students.Count > 0)
+        if (existingCourse.Students.Count == 0)
+        {
+            studentRequestSuccess = true;
+        }
+        else
         {
             try
             {
-                // Використання HTTP-клієнта для видалення студентів з курсу
                 var s_response = await _studentManagerClient.DeleteStudentFromCourse(id, existingCourse.Students);
-
                 if (s_response.StatusCode == HttpStatusCode.OK)
                 {
+                    existingCourse.Students.RemoveAll(existingCourse.Students.Contains);
+                    await _courseRepository.UpdateCourseAsync(id, existingCourse);
                     studentRequestSuccess = true;
-                }
-                else
-                {
-                    return BadRequest($"Failed to delete students from course. Status: {s_response.StatusCode}");
                 }
             }
             catch (BrokenCircuitException)
             {
-                // Якщо спрацьовує Circuit Breaker, публікуємо повідомлення до RabbitMQ
-                _rabbitMQClient.PublishMessage("student-course-delete", id + "," + String.Join(",", existingCourse.Students));
+                var message = new RabbitMQMessage
+                {
+                    Type = "delete",
+                    CourseId = existingCourse.Id,
+                    EntityIds = existingCourse.Students
+                };
+
+                _rabbitMQClient.PublishMessage("student-course", JsonSerializer.Serialize(message));
+
+                studentRequestSuccess = true;
+                existingCourse.Students.RemoveAll(existingCourse.Students.Contains);
+                await _courseRepository.UpdateCourseAsync(id, existingCourse);
                 Console.WriteLine("Send request to delete students from course to queue");
             }
         }
 
-        // Перевірка, чи є інструктори на курсі
-        if (existingCourse.Instructors.Count > 0)
+        if (existingCourse.Instructors.Count == 0)
+        {
+            instructorRequestSuccess = true;
+        }
+        else
         {
             try
             {
-                // Використання HTTP-клієнта для видалення інструкторів з курсу
                 var i_response = await _instructorManagerClient.DeleteInstructorFromCourse(id, existingCourse.Instructors);
 
                 if (i_response.StatusCode == HttpStatusCode.OK)
                 {
+                    existingCourse.Instructors.RemoveAll(existingCourse.Instructors.Contains);
+                    await _courseRepository.UpdateCourseAsync(id, existingCourse);
                     instructorRequestSuccess = true;
-                }
-                else
-                {
-                    return BadRequest($"Failed to delete instructors from course. Status: {i_response.StatusCode}");
                 }
             }
             catch (BrokenCircuitException)
             {
-                // Якщо спрацьовує Circuit Breaker, публікуємо повідомлення до RabbitMQ
-                _rabbitMQClient.PublishMessage("instructor-course-delete", id + "," + String.Join(",", existingCourse.Instructors));
+                var message = new RabbitMQMessage
+                {
+                    Type = "delete",
+                    CourseId = existingCourse.Id,
+                    EntityIds = existingCourse.Instructors
+                };
+
+                _rabbitMQClient.PublishMessage("instructor-course", JsonSerializer.Serialize(message));
+
+                instructorRequestSuccess = true;
+                existingCourse.Instructors.RemoveAll(existingCourse.Instructors.Contains);
+                await _courseRepository.UpdateCourseAsync(id, existingCourse);
                 Console.WriteLine("Send request to delete instructors from course to queue");
             }
         }
 
-        // Перевіряємо, чи хоча б одне з HTTP-з'єднань було успішним.
-        // Якщо обидва з'єднання не вдалися, курс не буде видалено
-        if (!studentRequestSuccess && !instructorRequestSuccess)
+        if (!studentRequestSuccess || !instructorRequestSuccess)
         {
-            return StatusCode(500, "Both student and instructor services are unavailable.");
+            return StatusCode(503, "Remote services temporaly unavailable.");
         }
 
-        // Якщо студенти і інструктори були видалені, видаляємо курс
         await _courseRepository.DeleteCourseAsync(id);
         Console.WriteLine($"Processed request to delete course {id} from {HttpContext.Connection.RemoteIpAddress}");
 

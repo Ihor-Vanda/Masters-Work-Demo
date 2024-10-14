@@ -1,14 +1,23 @@
+using MongoDB.Driver;
+using MongoDB.Driver.Core.Operations;
+
 namespace InstructorsManager.Repository;
 
 public interface IRepository
 {
-    Task<List<Instructor>> GetAllInstructors();
+    Task<List<Instructor>> GetInstructorsAsync();
 
-    Task<Instructor?> GetInstructorById(string id);
+    Task<Instructor> GetInstructorByIdAsync(string id);
 
-    Task AddInstructor(Instructor instructor);
+    Task AddInstructorAsync(Instructor instructor);
 
-    Task UpdateInstructor(string id, Instructor instructor);
+    Task<UpdateResult> UpdateAsync(string id, UpdateDefinition<Instructor> updateDefinition);
 
-    Task DeleteInstructor(string id);
+    Task<UpdateResult> UpdateInstructorAsync(string id, Instructor instructor);
+
+    Task<UpdateResult> AddCourseAsync(string instructorId, string courseId);
+
+    Task<UpdateResult> DeleteCourseAsync(string instructorId, string courseId);
+
+    Task<DeleteResult> DeleteInstructorAsync(string id);
 }

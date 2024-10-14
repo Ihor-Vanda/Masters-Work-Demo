@@ -2,7 +2,7 @@ using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;
 using System.ComponentModel.DataAnnotations;
 
-namespace CoursesManager.DTO;
+namespace CoursesManager;
 
 public class Course
 {

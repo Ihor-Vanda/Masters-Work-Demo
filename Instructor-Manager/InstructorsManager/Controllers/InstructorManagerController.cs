@@ -29,7 +29,7 @@ public class InstructorManagerController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<IEnumerable<Instructor>>> GetAllInstructors()
     {
-        var instructors = await _instructorRepository.GetAllInstructors();
+        var instructors = await _instructorRepository.GetInstructorsAsync();
 
         Console.WriteLine($"Procecced request to get all instructors from{HttpContext.Connection.RemoteIpAddress}");
 
@@ -45,7 +45,7 @@ public class InstructorManagerController : ControllerBase
             return BadRequest("Invalid id");
         }
 
-        var instructor = await _instructorRepository.GetInstructorById(id);
+        var instructor = await _instructorRepository.GetInstructorByIdAsync(id);
 
         if (instructor == null)
         {
@@ -80,7 +80,7 @@ public class InstructorManagerController : ControllerBase
             Email = instructorDTO.Email
         };
 
-        await _instructorRepository.AddInstructor(instructor);
+        await _instructorRepository.AddInstructorAsync(instructor);
 
         Console.WriteLine($"Procecced request to add instructors from{HttpContext.Connection.RemoteIpAddress}");
 
@@ -101,7 +101,7 @@ public class InstructorManagerController : ControllerBase
             return BadRequest("Reqired field are empty");
         }
 
-        var instructor = await _instructorRepository.GetInstructorById(id);
+        var instructor = await _instructorRepository.GetInstructorByIdAsync(id);
         if (instructor == null)
         {
             return NotFound("The instructor not found");
@@ -118,7 +118,7 @@ public class InstructorManagerController : ControllerBase
         instructor.PhoneNumber = instructorDTO.PhoneNumber;
         instructor.Email = instructorDTO.Email;
 
-        await _instructorRepository.UpdateInstructor(id, instructor);
+        await _instructorRepository.UpdateInstructorAsync(id, instructor);
 
         Console.WriteLine($"Procecced request to update instructor {id} from{HttpContext.Connection.RemoteIpAddress}");
 
@@ -134,24 +134,10 @@ public class InstructorManagerController : ControllerBase
             return BadRequest("Invalid request");
         }
 
-        // try
-        // {
-        //     var courseExists = await _courseServiceClient.CheckCourseExists(id);
-        //     if (!courseExists)
-        //     {
-        //         return BadRequest($"Course with id {id} does not exist.");
-        //     }
-        // }
-        // catch (BrokenCircuitException)
-        // {
-        //     // Circuit breaker is open, return 503 Service Unavailable
-        //     return StatusCode(503, "Course service is temporarily unavailable due to a circuit breaker.");
-        // }
-
         var instructorsList = new List<Instructor>();
         foreach (var instructorId in instructorIds)
         {
-            var instructor = await _instructorRepository.GetInstructorById(instructorId);
+            var instructor = await _instructorRepository.GetInstructorByIdAsync(instructorId);
             if (instructor == null)
             {
                 return BadRequest($"The instructor with id {instructorId} does not exist");
@@ -159,17 +145,13 @@ public class InstructorManagerController : ControllerBase
             instructorsList.Add(instructor);
         }
 
-        var updateTasks = instructorsList
-            .Where(x => !x.Courses.Contains(id))
-            .Select(x =>
-            {
-                x.Courses.Add(id);
-                return _instructorRepository.UpdateInstructor(x.Id, x);
-            });
+        for (int i = 0; i < instructorsList.Count; i++)
+        {
+            var instructor = instructorsList[i];
+            await _instructorRepository.AddCourseAsync(instructor.Id, id);
+        }
 
-        await Task.WhenAll(updateTasks);
-
-        Console.WriteLine($"Processed request adding course {id} to students {string.Join(", ", instructorIds)} from {HttpContext.Connection.RemoteIpAddress}");
+        Console.WriteLine($"Processed request adding course {id} to instructors {string.Join(", ", instructorIds)} from {HttpContext.Connection.RemoteIpAddress}");
 
         return Ok(instructorsList.Select(i => i.Id).ToList());
     }
@@ -183,32 +165,26 @@ public class InstructorManagerController : ControllerBase
             return BadRequest("Invalid request");
         }
 
-        // var courseExists = await _courseServiceClient.CheckCourseExists(id);
-        // if (!courseExists)
-        // {
-        //     return BadRequest($"Course with id {id} does not exist.");
-        // }
-
-        var instructorList = await _instructorRepository.GetAllInstructors();
-
-        if (instructorList == null)
+        var instructorsList = new List<Instructor>();
+        foreach (var instructorId in instructorIds)
         {
-            return BadRequest("Can't get instructors from repo");
+            var instructor = await _instructorRepository.GetInstructorByIdAsync(instructorId);
+            if (instructor == null)
+            {
+                return BadRequest($"The instructor with id {instructorId} does not exist");
+            }
+            instructorsList.Add(instructor);
         }
 
-        instructorList.FindAll(i => instructorIds.Contains(i.Id));
-
-        var updateTasks = instructorList.Select(x =>
+        for (int i = 0; i < instructorsList.Count; i++)
         {
-            x.Courses.Remove(id);
-            return _instructorRepository.UpdateInstructor(x.Id, x);
-        });
-
-        await Task.WhenAll(updateTasks);
+            var instructor = instructorsList[i];
+            await _instructorRepository.DeleteCourseAsync(instructor.Id, id);
+        }
 
         Console.WriteLine($"Processed request deleting course {id} from students {string.Join(", ", instructorIds)} from {HttpContext.Connection.RemoteIpAddress}");
 
-        return Ok(instructorList.Select(i => i.Id).ToList());
+        return Ok(instructorsList.Select(i => i.Id).ToList());
     }
 
     //DELETE: instructors/{id}
@@ -220,13 +196,20 @@ public class InstructorManagerController : ControllerBase
             return BadRequest("Invalid id");
         }
 
-        var instructor = await _instructorRepository.GetInstructorById(id);
+        var instructor = await _instructorRepository.GetInstructorByIdAsync(id);
         if (instructor == null)
         {
             return NotFound("The instructor not foud");
         }
 
-        if (instructor.Courses.Count > 0)
+        if (instructor.Courses.Count == 0)
+        {
+            await _instructorRepository.DeleteInstructorAsync(id);
+            Console.WriteLine($"Procecced request to delete instructors {id} from {HttpContext.Connection.RemoteIpAddress}");
+
+            return NoContent();
+        }
+        else
         {
             try
             {
@@ -237,7 +220,7 @@ public class InstructorManagerController : ControllerBase
                     return StatusCode(503, "Remote service temporaly unavaible");
                 }
 
-                await _instructorRepository.DeleteInstructor(id);
+                await _instructorRepository.DeleteInstructorAsync(id);
 
                 Console.WriteLine($"Procecced request to delete instructors {id} from {HttpContext.Connection.RemoteIpAddress}");
 
@@ -246,14 +229,9 @@ public class InstructorManagerController : ControllerBase
             catch (BrokenCircuitException)
             {
                 _rabbitMQClient.PublishMessage("instructor-delete", id);
-                await _instructorRepository.DeleteInstructor(id);
-                return StatusCode(503, "Sending request to delete instructor to queue");
+                await _instructorRepository.DeleteInstructorAsync(id);
+                return StatusCode(200, "Sending request to delete instructor to queue");
             }
         }
-
-        await _instructorRepository.DeleteInstructor(id);
-        Console.WriteLine($"Procecced request to delete instructors {id} from {HttpContext.Connection.RemoteIpAddress}");
-
-        return NoContent();
     }
 }

@@ -1,4 +1,5 @@
 using CoursesManager.DTO;
+using MongoDB.Driver;
 
 namespace CoursesManager.Repository
 {
@@ -16,7 +17,7 @@ namespace CoursesManager.Repository
             return await _mongoDBRepository.GetAllCoursesAsync();
         }
 
-        public async Task<Course?> GetCourseByIdAsync(string id)
+        public async Task<Course> GetCourseByIdAsync(string id)
         {
             return await _mongoDBRepository.GetCourseByIdAsync(id);
         }
@@ -26,14 +27,29 @@ namespace CoursesManager.Repository
             await _mongoDBRepository.CreateCourseAsync(course);
         }
 
-        public async Task UpdateCourseAsync(string id, Course updatedCourse)
+        public async Task<UpdateResult> UpdateAsync(string id, UpdateDefinition<Course> updateDefinition)
         {
-            await _mongoDBRepository.UpdateCourseAsync(id, updatedCourse);
+            return await _mongoDBRepository.UpdateAsync(id, updateDefinition);
         }
 
-        public async Task DeleteCourseAsync(string id)
+        public async Task<UpdateResult> UpdateCourseAsync(string id, Course updatedCourse)
         {
-            await _mongoDBRepository.DeleteCourseAsync(id);
+            return await _mongoDBRepository.UpdateCourseAsync(id, updatedCourse);
+        }
+
+        public async Task<UpdateResult> RemoveStudentAsync(string courseId, string studentId)
+        {
+            return await _mongoDBRepository.RemoveStudentAsync(courseId, studentId);
+        }
+
+        public async Task<UpdateResult> RemoveInstructorAsync(string courseId, string instructorId)
+        {
+            return await _mongoDBRepository.RemoveInstructorAsync(courseId, instructorId);
+        }
+
+        public async Task<DeleteResult> DeleteCourseAsync(string id)
+        {
+            return await _mongoDBRepository.DeleteCourseAsync(id);
         }
     }
 }

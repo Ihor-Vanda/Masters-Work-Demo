@@ -21,7 +21,7 @@ namespace CoursesManager.Repository
             return await _courses.Find(course => true).ToListAsync();
         }
 
-        public async Task<Course?> GetCourseByIdAsync(string id)
+        public async Task<Course> GetCourseByIdAsync(string id)
         {
             return await _courses.Find(course => course.Id == id).FirstOrDefaultAsync();
         }
@@ -34,11 +34,26 @@ namespace CoursesManager.Repository
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Помилка під час додавання курсу: {ex.Message}");
+                Console.WriteLine($"Failed to create course: {ex.Message}");
             }
         }
 
-        public async Task UpdateCourseAsync(string id, Course updatedCourse)
+        public async Task<UpdateResult> UpdateAsync(string id, UpdateDefinition<Course> updateDefinition)
+        {
+            var result = await _courses.UpdateOneAsync(
+                course => course.Id == id,
+                updateDefinition
+            );
+
+            if (result.MatchedCount == 0)
+            {
+                throw new Exception("Failed to update the course. It may not exist.");
+            }
+
+            return result;
+        }
+
+        public async Task<UpdateResult> UpdateCourseAsync(string id, Course updatedCourse)
         {
             var updateDefinition = Builders<Course>.Update
                 .Set(c => c.Title, updatedCourse.Title)
@@ -51,22 +66,25 @@ namespace CoursesManager.Repository
                 .Set(c => c.MaxStudents, updatedCourse.MaxStudents)
                 .Set(c => c.Instructors, updatedCourse.Instructors)
                 .Set(c => c.Students, updatedCourse.Students);
-            // .Set(c => c.Tests, updatedCourse.Tests);
 
-            var result = await _courses.UpdateOneAsync(
-                course => course.Id == id,
-                updateDefinition
-            );
-
-            if (result.MatchedCount == 0)
-            {
-                throw new Exception("Failed to update the course. It may not exist.");
-            }
+            return await UpdateAsync(id, updateDefinition);
         }
 
-        public async Task DeleteCourseAsync(string id)
+        public async Task<UpdateResult> RemoveStudentAsync(string courseId, string studentId)
         {
-            await _courses.DeleteOneAsync(course => course.Id == id);
+            var updateDefinition = Builders<Course>.Update.Pull(c => c.Students, studentId);
+            return await UpdateAsync(courseId, updateDefinition);
+        }
+
+        public async Task<UpdateResult> RemoveInstructorAsync(string courseId, string instructorId)
+        {
+            var updateDefinition = Builders<Course>.Update.Pull(c => c.Instructors, instructorId);
+            return await UpdateAsync(courseId, updateDefinition);
+        }
+
+        public async Task<DeleteResult> DeleteCourseAsync(string id)
+        {
+            return await _courses.DeleteOneAsync(course => course.Id == id);
         }
     }
 }

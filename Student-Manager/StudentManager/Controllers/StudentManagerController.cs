@@ -1,9 +1,10 @@
+using System.Net;
+using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
+using ModifiedCB;
+using ModifiedCB.Settings;
 using MongoDB.Bson;
-using Polly.CircuitBreaker;
-using StudentManager.Clients;
 using StudentManager.DTO;
-using StudentManager.RabbitMQ;
 using StudentManager.Repository;
 
 namespace StudentManager.Controllers;
@@ -14,15 +15,14 @@ public class StudentManagerController : ControllerBase
 {
     private readonly IRepository _studentRepository;
 
-    private readonly CourseServiceClient _courseServiceClient;
+    private readonly ICommunicationStrategy _communicationStrategy;
 
-    private readonly RabbitMQClient _rabbitMQClient;
-
-    public StudentManagerController(IRepository studentRepository, CourseServiceClient courseServiceClient, RabbitMQClient rabbitMQClient)
+    public StudentManagerController(
+        IRepository studentRepository,
+        ICommunicationStrategy communicationStrategy)
     {
         _studentRepository = studentRepository;
-        _courseServiceClient = courseServiceClient;
-        _rabbitMQClient = rabbitMQClient;
+        _communicationStrategy = communicationStrategy;
     }
 
     //GET: students
@@ -40,8 +40,7 @@ public class StudentManagerController : ControllerBase
     [HttpGet("{id}")]
     public async Task<ActionResult<Student>> GetStudentById(string id)
     {
-
-        if (!ObjectId.TryParse(id, out var idValue))
+        if (!ObjectId.TryParse(id, out _))
         {
             return BadRequest("Invalid id");
         }
@@ -216,26 +215,34 @@ public class StudentManagerController : ControllerBase
             return NoContent();
         }
 
+        var settings = new CommunicationSettings
+        {
+            HttpSettings = new HttpCommunicationSettings
+            {
+                Method = HttpMethod.Put,
+                DestinationURL = $"http://courses_manager_service:8080/students/{id}",
+                Message = null
+            },
+            RabbitMqSettings = new RabbitMqCommunicationSettings
+            {
+                QueueName = "student-delete",
+                Message = id
+            }
+        };
+
         try
         {
-            var response = await _courseServiceClient.DeleteStudentFromCourses(id);
-
-            if (response != System.Net.HttpStatusCode.OK)
-            {
-                return StatusCode(503, "Remote service temporaly unavaible");
-            }
-
-            await _studentRepository.DeleteStudentAsync(id);
-
-            Console.WriteLine($"Procecced request to delete student {id} from {HttpContext.Connection.RemoteIpAddress}");
-
-            return NoContent();
+            await _communicationStrategy.SendMessage(settings);
         }
-        catch (BrokenCircuitException)
+        catch (Exception ex)
         {
-            _rabbitMQClient.PublishMessage("student-delete", id);
-            await _studentRepository.DeleteStudentAsync(id);
-            return StatusCode(200, "Sending request to delete student to queue");
+            return StatusCode((int)HttpStatusCode.InternalServerError, $"Error occurred: {ex.Message}");
         }
+
+        await _studentRepository.DeleteStudentAsync(id);
+
+        Console.WriteLine($"Procecced request to delete student {id} from {HttpContext.Connection.RemoteIpAddress}");
+
+        return NoContent();
     }
 }

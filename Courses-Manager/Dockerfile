@@ -8,12 +8,19 @@ EXPOSE 443
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
 
-# Копіюємо файл проекту та відновлюємо залежності
+# Копіюємо тільки файл проекту та csproj файли для оптимізації кешування
 COPY ["CoursesManager/CoursesManager.csproj", "CoursesManager/"]
+
+# Копіюємо бібліотеку DLL до контейнера
+COPY CoursesManager/lib/ModifiedCB.dll ./lib/
+
+# Виконуємо відновлення залежностей
 RUN dotnet restore "CoursesManager/CoursesManager.csproj"
 
-# Копіюємо весь вихідний код і будуємо проект
+# Тепер копіюємо весь вихідний код
 COPY . .
+
+# Збираємо проект
 WORKDIR "/src/CoursesManager"
 RUN dotnet build "CoursesManager.csproj" -c Release -o /app/build
 

@@ -10,6 +10,10 @@ WORKDIR /src
 
 # Копіюємо файл проекту та відновлюємо залежності
 COPY ["StudentManager/StudentManager.csproj", "StudentManager/"]
+
+# Копіюємо бібліотеку DLL до контейнера
+COPY StudentManager/lib/ModifiedCB.dll ./lib/
+
 RUN dotnet restore "StudentManager/StudentManager.csproj"
 
 # Копіюємо весь вихідний код і будуємо проект

@@ -1,10 +1,11 @@
-using InstructorsManager.Clients;
+using System.Net;
+using System.Text.Json;
 using InstructorsManager.DTO;
-using InstructorsManager.RabbitMQ;
 using InstructorsManager.Repository;
 using Microsoft.AspNetCore.Mvc;
+using ModifiedCB;
+using ModifiedCB.Settings;
 using MongoDB.Bson;
-using Polly.CircuitBreaker;
 
 namespace InstructorsManager.Controllers;
 
@@ -14,15 +15,14 @@ public class InstructorManagerController : ControllerBase
 {
     private readonly IRepository _instructorRepository;
 
-    private readonly CourseServiceClient _courseServiceClient;
+    private readonly ICommunicationStrategy _communicationStrategy;
 
-    private readonly RabbitMQClient _rabbitMQClient;
-
-    public InstructorManagerController(IRepository instructorRepository, CourseServiceClient courseServiceClient, RabbitMQClient rabbitMQClient)
+    public InstructorManagerController(
+        IRepository instructorRepository,
+        ICommunicationStrategy communicationStrategy)
     {
         _instructorRepository = instructorRepository;
-        _courseServiceClient = courseServiceClient;
-        _rabbitMQClient = rabbitMQClient;
+        _communicationStrategy = communicationStrategy;
     }
 
     //GET: instructors
@@ -209,29 +209,35 @@ public class InstructorManagerController : ControllerBase
 
             return NoContent();
         }
-        else
+
+        var settings = new CommunicationSettings
         {
-            try
+            HttpSettings = new HttpCommunicationSettings
             {
-                var response = await _courseServiceClient.DeleteInstructorFromCourses(id);
-
-                if (response != System.Net.HttpStatusCode.OK)
-                {
-                    return StatusCode(503, "Remote service temporaly unavaible");
-                }
-
-                await _instructorRepository.DeleteInstructorAsync(id);
-
-                Console.WriteLine($"Procecced request to delete instructors {id} from {HttpContext.Connection.RemoteIpAddress}");
-
-                return NoContent();
-            }
-            catch (BrokenCircuitException)
+                Method = HttpMethod.Put,
+                DestinationURL = $"http://courses_manager_service:8080/instructors/{id}",
+                Message = null
+            },
+            RabbitMqSettings = new RabbitMqCommunicationSettings
             {
-                _rabbitMQClient.PublishMessage("instructor-delete", id);
-                await _instructorRepository.DeleteInstructorAsync(id);
-                return StatusCode(200, "Sending request to delete instructor to queue");
+                QueueName = "instructor-delete",
+                Message = id
             }
+        };
+
+        try
+        {
+            await _communicationStrategy.SendMessage(settings);
         }
+        catch (Exception ex)
+        {
+            return StatusCode((int)HttpStatusCode.InternalServerError, $"Error occurred: {ex.Message}");
+        }
+
+        await _instructorRepository.DeleteInstructorAsync(id);
+
+        Console.WriteLine($"Procecced request to delete instructors {id} from {HttpContext.Connection.RemoteIpAddress}");
+
+        return NoContent();
     }
 }

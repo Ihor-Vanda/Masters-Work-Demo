@@ -1,26 +1,61 @@
-using CoursesManager.Clients;
 using CoursesManager.RabbitMQ;
 using CoursesManager.Repository;
 using CoursesManager.Settings;
 using Polly;
 using Polly.Extensions.Http;
+using ModifiedCB;
+using ModifiedCB.Settings;
+using RabbitMQ.Client;
 
 var builder = WebApplication.CreateBuilder(args);
 
 var mongoDBSettings = builder.Configuration.GetSection("MongoDBSettings").Get<MongoDBSettings>() ?? throw new InvalidOperationException("MongoDB settings are not configured properly.");
-
 builder.Services.AddSingleton(mongoDBSettings);
 
 builder.Services.AddSingleton<MongoDBRepository>();
 builder.Services.AddScoped<IRepository, CourseRepository>();
 
-builder.Services.AddHttpClient<InstructorManagerClient>()
-    .AddPolicyHandler(GetCircuitBreakerPolicy());
-builder.Services.AddHttpClient<StudentManagerClient>()
-    .AddPolicyHandler(GetCircuitBreakerPolicy());
+var circuitBreakerSettings = builder.Configuration.GetSection("CircuitBreakerSettings").Get<CircuitBreakerSettings>() ?? throw new InvalidOperationException("CircuitBreaker settings are not configured properly.");
+builder.Services.AddSingleton(circuitBreakerSettings);
+
+builder.Services.AddHttpClient<HttpCommunication>()
+                .AddPolicyHandler(GetCircuitBreakerPolicy(circuitBreakerSettings));
 
 builder.Services.AddHostedService<RabbitMQConsumer>();
-builder.Services.AddSingleton<RabbitMQClient>();
+
+builder.Services.AddSingleton<IConnection>(sp =>
+{
+    var factory = new ConnectionFactory
+    {
+        HostName = circuitBreakerSettings.RabbitMq.HostName,
+        Port = circuitBreakerSettings.RabbitMq.Port,
+        UserName = circuitBreakerSettings.RabbitMq.UserName,
+        Password = circuitBreakerSettings.RabbitMq.Password
+    };
+    return factory.CreateConnection();
+});
+builder.Services.AddSingleton<RabbitMqCommunication>();
+
+builder.Services.AddSingleton<ICommunicationStrategy>(sp =>
+{
+    var httpCommunication = sp.GetRequiredService<HttpCommunication>();
+    var rabbitMqCommunication = sp.GetRequiredService<RabbitMqCommunication>();
+
+    var circuitBreakerSettings = sp.GetRequiredService<CircuitBreakerSettings>();
+
+    return circuitBreakerSettings.OperationMode switch
+    {
+        "HttpOnly" => httpCommunication, // Тільки HTTP
+        "RabbitMqOnly" => rabbitMqCommunication, // Тільки RabbitMQ
+        "Combined" => new CBCommunication(
+            httpCommunication,
+            rabbitMqCommunication,
+            TimeSpan.FromMilliseconds(circuitBreakerSettings.RetryDelayMilliseconds),
+            circuitBreakerSettings.FailureThreshold,
+            TimeSpan.FromSeconds(circuitBreakerSettings.ResetTimeoutSeconds)),
+        _ => throw new InvalidOperationException($"Unsupported operation mode: {circuitBreakerSettings.OperationMode}")
+    };
+});
 
 builder.Services.AddControllers();
 
@@ -45,21 +80,21 @@ app.MapControllers();
 app.Run();
 
 
-IAsyncPolicy<HttpResponseMessage> GetCircuitBreakerPolicy()
+IAsyncPolicy<HttpResponseMessage> GetCircuitBreakerPolicy(CircuitBreakerSettings circuitBreakerSettings)
 {
     return HttpPolicyExtensions
-        .HandleTransientHttpError() // Handles transient errors such as 5xx and timeout
-        .WaitAndRetryAsync( // Exponential backoff with jitter
-            retryCount: 2, // Retry up to 1 times
+        .HandleTransientHttpError()
+        .WaitAndRetryAsync(
+            retryCount: circuitBreakerSettings.RetryAttempts, // Використовуємо кількість спроб з конфігурації
             sleepDurationProvider: retryAttempt =>
-                TimeSpan.FromSeconds(1)
+                TimeSpan.FromMilliseconds(circuitBreakerSettings.RetryDelayMilliseconds) // Використовуємо затримку з конфігурації
         )
         .WrapAsync(
             HttpPolicyExtensions
             .HandleTransientHttpError()
             .CircuitBreakerAsync(
-                handledEventsAllowedBeforeBreaking: 2, // Number of failures before opening the circuit
-                durationOfBreak: TimeSpan.FromSeconds(30),  // Initial duration of break
+                handledEventsAllowedBeforeBreaking: circuitBreakerSettings.FailureThreshold, // Кількість невдач до відкриття
+                durationOfBreak: TimeSpan.FromSeconds(circuitBreakerSettings.ResetTimeoutSeconds),  // Тривалість паузи після збою
                 onBreak: (result, breakDelay) =>
                 {
                     Console.WriteLine($"Circuit breaker triggered! Delay: {breakDelay}, Exception: {result.Exception?.Message}");

@@ -107,7 +107,7 @@ public class RabbitMQConsumer : BackgroundService
         {
             var course = list[i];
 
-            if (course.Students.Contains(course.Id))
+            if (course.Students.Contains(id))
             {
                 var res = await repo.RemoveStudentAsync(course.Id, id);
 
@@ -156,7 +156,7 @@ public class RabbitMQConsumer : BackgroundService
         {
             var course = list[i];
 
-            if (course.Instructors.Contains(course.Id))
+            if (course.Instructors.Contains(id))
             {
                 var res = await repo.RemoveInstructorAsync(course.Id, id);
 

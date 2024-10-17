@@ -4,5 +4,5 @@ namespace ModifiedCB;
 
 public interface ICommunicationStrategy
 {
-    Task SendMessage(CommunicationSettings settings);
+    Task<bool> SendMessage(CommunicationSettings settings);
 }

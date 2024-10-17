@@ -106,7 +106,7 @@ namespace StudentManager.RabbitMQ
                 return;
             }
 
-            var list = students.FindAll(s => message.EntityIds.Contains(s.Id));
+            var list = students.FindAll(s => message.EntityIds != null && message.EntityIds.Any(id => id != null && id == s.Id));
 
             if (list == null || list.Count == 0)
             {
@@ -116,8 +116,10 @@ namespace StudentManager.RabbitMQ
 
             foreach (var student in list)
             {
+                ArgumentNullException.ThrowIfNull(message.CourseId);
                 if (student.Courses.Contains(message.CourseId))
                 {
+                    ArgumentNullException.ThrowIfNull(student.Id);
                     var res = await studentRepository.DeleteCourseAsync(student.Id, message.CourseId);
                     Console.WriteLine($"Updated student {student.Id} - Success: {res.ModifiedCount > 0}");
                     Console.WriteLine($"Deleted course {message.CourseId} from student {student.Id}.");
@@ -141,7 +143,7 @@ namespace StudentManager.RabbitMQ
                 return;
             }
 
-            var list = students.FindAll(s => message.EntityIds.Contains(s.Id));
+            var list = students.FindAll(s => message.EntityIds != null && message.EntityIds.Any(id => id != null && id == s.Id));
 
             if (list == null || list.Count == 0)
             {
@@ -151,8 +153,10 @@ namespace StudentManager.RabbitMQ
 
             foreach (var student in list)
             {
+                ArgumentNullException.ThrowIfNull(message.CourseId);
                 if (!student.Courses.Contains(message.CourseId))
                 {
+                    ArgumentNullException.ThrowIfNull(student.Id);
                     var res = await studentRepository.AddCourseAsync(student.Id, message.CourseId);
                     Console.WriteLine($"Updated student {student.Id} - Success: {res.ModifiedCount > 0}");
                     Console.WriteLine($"Added course {message.CourseId} to student {student.Id}.");

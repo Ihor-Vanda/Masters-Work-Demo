@@ -1,4 +1,3 @@
-using InstructorsManager.Clients;
 using InstructorsManager.RabbitMQ;
 using InstructorsManager.Repository;
 using InstructorsManager.Settings;
@@ -6,6 +5,7 @@ using ModifiedCB;
 using ModifiedCB.Settings;
 using Polly;
 using Polly.Extensions.Http;
+using Prometheus;
 using RabbitMQ.Client;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -22,8 +22,21 @@ builder.Services.AddScoped<IRepository, InstructorRepository>();
 var circuitBreakerSettings = builder.Configuration.GetSection("CircuitBreakerSettings").Get<CircuitBreakerSettings>() ?? throw new InvalidOperationException("CircuitBreaker settings are not configured properly.");
 builder.Services.AddSingleton(circuitBreakerSettings);
 
-builder.Services.AddHttpClient<HttpCommunication>()
-                .AddPolicyHandler(GetCircuitBreakerPolicy(circuitBreakerSettings));
+builder.Services.AddHttpClient<HttpCommunication>();
+builder.Services.AddTransient<HttpCommunication>(sp =>
+{
+    var httpClient = sp.GetRequiredService<HttpClient>();
+
+    var circuitBreakerSettings = sp.GetRequiredService<CircuitBreakerSettings>();
+
+    var circuitBreaker = new CircuitBreakerWithRetry(
+        circuitBreakerSettings.FailureThreshold,
+        TimeSpan.FromSeconds(circuitBreakerSettings.ResetTimeoutSeconds),
+        circuitBreakerSettings.RetryAttempts,
+        TimeSpan.FromMilliseconds(circuitBreakerSettings.RetryDelayMilliseconds));
+
+    return new HttpCommunication(httpClient, circuitBreaker);
+});
 
 builder.Services.AddHostedService<RabbitMQConsumer>();
 
@@ -53,10 +66,7 @@ builder.Services.AddSingleton<ICommunicationStrategy>(sp =>
         "RabbitMqOnly" => rabbitMqCommunication, // Тільки RabbitMQ
         "Combined" => new CBCommunication(
             httpCommunication,
-            rabbitMqCommunication,
-            TimeSpan.FromMilliseconds(circuitBreakerSettings.RetryDelayMilliseconds),
-            circuitBreakerSettings.FailureThreshold,
-            TimeSpan.FromSeconds(circuitBreakerSettings.ResetTimeoutSeconds)),
+            rabbitMqCommunication),
         _ => throw new InvalidOperationException($"Unsupported operation mode: {circuitBreakerSettings.OperationMode}")
     };
 });
@@ -77,35 +87,18 @@ if (app.Environment.IsDevelopment())
 
 // app.UseHttpsRedirection();
 
-app.UseAuthorization();
-
 app.MapControllers();
 
-app.Run();
+app.UseRouting();
 
-IAsyncPolicy<HttpResponseMessage> GetCircuitBreakerPolicy(CircuitBreakerSettings circuitBreakerSettings)
+app.UseAuthorization();
+
+app.UseHttpMetrics(); // Це додасть стандартні метрики HTTP запитів
+
+app.UseEndpoints(endpoints =>
 {
-    return HttpPolicyExtensions
-        .HandleTransientHttpError()
-        .WaitAndRetryAsync(
-            retryCount: circuitBreakerSettings.RetryAttempts, // Використовуємо кількість спроб з конфігурації
-            sleepDurationProvider: retryAttempt =>
-                TimeSpan.FromMilliseconds(circuitBreakerSettings.RetryDelayMilliseconds) // Використовуємо затримку з конфігурації
-        )
-        .WrapAsync(
-            HttpPolicyExtensions
-            .HandleTransientHttpError()
-            .CircuitBreakerAsync(
-                handledEventsAllowedBeforeBreaking: circuitBreakerSettings.FailureThreshold, // Кількість невдач до відкриття
-                durationOfBreak: TimeSpan.FromSeconds(circuitBreakerSettings.ResetTimeoutSeconds),  // Тривалість паузи після збою
-                onBreak: (result, breakDelay) =>
-                {
-                    Console.WriteLine($"Circuit breaker triggered! Delay: {breakDelay}, Exception: {result.Exception?.Message}");
-                },
-                onReset: () =>
-                {
-                    Console.WriteLine("Circuit breaker reset");
-                }
-            )
-        );
-}
+    _ = endpoints.MapControllers();
+    _ = endpoints.MapMetrics(); // Це відкриє метрики за /metrics
+});
+
+app.Run();

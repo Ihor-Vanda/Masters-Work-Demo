@@ -1,5 +1,4 @@
 using System.Net;
-using System.Text.Json;
 using InstructorsManager.DTO;
 using InstructorsManager.Repository;
 using Microsoft.AspNetCore.Mvc;
@@ -29,215 +28,245 @@ public class InstructorManagerController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<IEnumerable<Instructor>>> GetAllInstructors()
     {
-        var instructors = await _instructorRepository.GetInstructorsAsync();
+        ServiceMetrics.IncGetInstructorsRequests();
+        using (ServiceMetrics.TrackRequestDuration())
+        {
+            var instructors = await _instructorRepository.GetInstructorsAsync();
 
-        Console.WriteLine($"Procecced request to get all instructors from{HttpContext.Connection.RemoteIpAddress}");
+            Console.WriteLine($"Procecced request to get all instructors from{HttpContext.Connection.RemoteIpAddress}");
 
-        return Ok(instructors);
+            return Ok(instructors);
+        }
     }
 
     //GET: instructors/{id}
     [HttpGet("{id}")]
     public async Task<ActionResult<Instructor>> GetInstructorById(string id)
     {
-        if (!ObjectId.TryParse(id, out var idValue))
+        ServiceMetrics.IncGetInstructorByIdRequests();
+        using (ServiceMetrics.TrackRequestDuration())
         {
-            return BadRequest("Invalid id");
+            if (!ObjectId.TryParse(id, out var idValue))
+            {
+                return BadRequest("Invalid id");
+            }
+
+            var instructor = await _instructorRepository.GetInstructorByIdAsync(id);
+
+            if (instructor == null)
+            {
+                return NotFound("Instructor not found");
+            }
+
+            Console.WriteLine($"Procecced request to get all instructor {id} from{HttpContext.Connection.RemoteIpAddress}");
+
+            return Ok(instructor);
         }
-
-        var instructor = await _instructorRepository.GetInstructorByIdAsync(id);
-
-        if (instructor == null)
-        {
-            return NotFound("Instructor not found");
-        }
-
-        Console.WriteLine($"Procecced request to get all instructor {id} from{HttpContext.Connection.RemoteIpAddress}");
-
-        return Ok(instructor);
     }
 
     //POST: instructors
     [HttpPost]
     public async Task<ActionResult> AddInstructor([FromBody] InstructorDTO instructorDTO)
     {
-        if (instructorDTO == null)
+        ServiceMetrics.IncCreateInstructorRequests();
+        using (ServiceMetrics.TrackRequestDuration())
         {
-            return BadRequest("Instructor can't be null");
+            if (instructorDTO == null)
+            {
+                return BadRequest("Instructor can't be null");
+            }
+
+            if (!DateTime.TryParseExact(instructorDTO.BirthDate, "yyyy-MM-dd", null, System.Globalization.DateTimeStyles.None, out var birthDate))
+            {
+                return BadRequest("Date format is incorrect. Expected format: yyyy-MM-dd");
+            }
+
+            var instructor = new Instructor
+            {
+                FirstName = instructorDTO.FirstName,
+                LastName = instructorDTO.LastName,
+                BirthDate = birthDate,
+                PhoneNumber = instructorDTO.PhoneNumber,
+                Email = instructorDTO.Email
+            };
+
+            await _instructorRepository.AddInstructorAsync(instructor);
+
+            Console.WriteLine($"Procecced request to add instructors from{HttpContext.Connection.RemoteIpAddress}");
+
+            return CreatedAtAction(nameof(GetInstructorById), new { id = instructor.Id }, instructor);
         }
-
-        if (!DateTime.TryParseExact(instructorDTO.BirthDate, "yyyy-MM-dd", null, System.Globalization.DateTimeStyles.None, out var birthDate))
-        {
-            return BadRequest("Date format is incorrect. Expected format: yyyy-MM-dd");
-        }
-
-        var instructor = new Instructor
-        {
-            FirstName = instructorDTO.FirstName,
-            LastName = instructorDTO.LastName,
-            BirthDate = birthDate,
-            PhoneNumber = instructorDTO.PhoneNumber,
-            Email = instructorDTO.Email
-        };
-
-        await _instructorRepository.AddInstructorAsync(instructor);
-
-        Console.WriteLine($"Procecced request to add instructors from{HttpContext.Connection.RemoteIpAddress}");
-
-        return CreatedAtAction(nameof(GetInstructorById), new { id = instructor.Id }, instructor);
     }
 
     //PUT: instructors
     [HttpPut("{id}")]
     public async Task<ActionResult> UpdateInstructor(string id, [FromBody] InstructorDTO instructorDTO)
     {
-        if (string.IsNullOrWhiteSpace(id) || instructorDTO == null)
+        ServiceMetrics.IncUpdateInstructorRequests();
+        using (ServiceMetrics.TrackRequestDuration())
         {
-            return BadRequest("Invalid Request");
+            if (string.IsNullOrWhiteSpace(id) || instructorDTO == null)
+            {
+                return BadRequest("Invalid Request");
+            }
+
+            if (string.IsNullOrWhiteSpace(instructorDTO.FirstName) || string.IsNullOrWhiteSpace(instructorDTO.LastName) || string.IsNullOrWhiteSpace(instructorDTO.BirthDate))
+            {
+                return BadRequest("Reqired field are empty");
+            }
+
+            var instructor = await _instructorRepository.GetInstructorByIdAsync(id);
+            if (instructor == null)
+            {
+                return NotFound("The instructor not found");
+            }
+
+            if (!DateTime.TryParseExact(instructorDTO.BirthDate, "yyyy-MM-dd", null, System.Globalization.DateTimeStyles.None, out var birthDate))
+            {
+                return BadRequest("Date format is invalid. Expected format: yyyy-MM-dd");
+            }
+
+            instructor.FirstName = instructorDTO.FirstName;
+            instructor.LastName = instructorDTO.LastName;
+            instructor.BirthDate = birthDate;
+            instructor.PhoneNumber = instructorDTO.PhoneNumber;
+            instructor.Email = instructorDTO.Email;
+
+            await _instructorRepository.UpdateInstructorAsync(id, instructor);
+
+            Console.WriteLine($"Procecced request to update instructor {id} from{HttpContext.Connection.RemoteIpAddress}");
+
+            return NoContent();
         }
-
-        if (string.IsNullOrWhiteSpace(instructorDTO.FirstName) || string.IsNullOrWhiteSpace(instructorDTO.LastName) || string.IsNullOrWhiteSpace(instructorDTO.BirthDate))
-        {
-            return BadRequest("Reqired field are empty");
-        }
-
-        var instructor = await _instructorRepository.GetInstructorByIdAsync(id);
-        if (instructor == null)
-        {
-            return NotFound("The instructor not found");
-        }
-
-        if (!DateTime.TryParseExact(instructorDTO.BirthDate, "yyyy-MM-dd", null, System.Globalization.DateTimeStyles.None, out var birthDate))
-        {
-            return BadRequest("Date format is invalid. Expected format: yyyy-MM-dd");
-        }
-
-        instructor.FirstName = instructorDTO.FirstName;
-        instructor.LastName = instructorDTO.LastName;
-        instructor.BirthDate = birthDate;
-        instructor.PhoneNumber = instructorDTO.PhoneNumber;
-        instructor.Email = instructorDTO.Email;
-
-        await _instructorRepository.UpdateInstructorAsync(id, instructor);
-
-        Console.WriteLine($"Procecced request to update instructor {id} from{HttpContext.Connection.RemoteIpAddress}");
-
-        return NoContent();
     }
 
     //PUT: instructors/{id}/courses
     [HttpPut("courses/{id}/add")]
     public async Task<ActionResult> AddCourseToInstructors(string id, [FromBody] List<string> instructorIds)
     {
-        if (string.IsNullOrWhiteSpace(id))
+        ServiceMetrics.IncAddCourseToInstructorsRequests();
+        using (ServiceMetrics.TrackRequestDuration())
         {
-            return BadRequest("Invalid request");
-        }
-
-        var instructorsList = new List<Instructor>();
-        foreach (var instructorId in instructorIds)
-        {
-            var instructor = await _instructorRepository.GetInstructorByIdAsync(instructorId);
-            if (instructor == null)
+            if (string.IsNullOrWhiteSpace(id))
             {
-                return BadRequest($"The instructor with id {instructorId} does not exist");
+                return BadRequest("Invalid request");
             }
-            instructorsList.Add(instructor);
+
+            var instructorsList = new List<Instructor>();
+            foreach (var instructorId in instructorIds)
+            {
+                var instructor = await _instructorRepository.GetInstructorByIdAsync(instructorId);
+                if (instructor == null)
+                {
+                    return BadRequest($"The instructor with id {instructorId} does not exist");
+                }
+                instructorsList.Add(instructor);
+            }
+
+            for (int i = 0; i < instructorsList.Count; i++)
+            {
+                var instructor = instructorsList[i];
+                ArgumentNullException.ThrowIfNull(instructor.Id);
+                await _instructorRepository.AddCourseAsync(instructor.Id, id);
+            }
+
+            Console.WriteLine($"Processed request adding course {id} to instructors {string.Join(", ", instructorIds)} from {HttpContext.Connection.RemoteIpAddress}");
+
+            return Ok(instructorsList.Select(i => i.Id).ToList());
         }
-
-        for (int i = 0; i < instructorsList.Count; i++)
-        {
-            var instructor = instructorsList[i];
-            await _instructorRepository.AddCourseAsync(instructor.Id, id);
-        }
-
-        Console.WriteLine($"Processed request adding course {id} to instructors {string.Join(", ", instructorIds)} from {HttpContext.Connection.RemoteIpAddress}");
-
-        return Ok(instructorsList.Select(i => i.Id).ToList());
     }
 
     //PUT: instructors/courses/{id}/delete
     [HttpPut("courses/{id}/delete")]
     public async Task<ActionResult> DeleteInstructorsFromCourse(string id, [FromBody] List<string> instructorIds)
     {
-        if (string.IsNullOrWhiteSpace(id) || instructorIds == null || instructorIds.Count == 0)
+        ServiceMetrics.IncDeleteInstructorRequests();
+        using (ServiceMetrics.TrackRequestDuration())
         {
-            return BadRequest("Invalid request");
-        }
-
-        var instructorsList = new List<Instructor>();
-        foreach (var instructorId in instructorIds)
-        {
-            var instructor = await _instructorRepository.GetInstructorByIdAsync(instructorId);
-            if (instructor == null)
+            if (string.IsNullOrWhiteSpace(id) || instructorIds == null || instructorIds.Count == 0)
             {
-                return BadRequest($"The instructor with id {instructorId} does not exist");
+                return BadRequest("Invalid request");
             }
-            instructorsList.Add(instructor);
+
+            var instructorsList = new List<Instructor>();
+            foreach (var instructorId in instructorIds)
+            {
+                var instructor = await _instructorRepository.GetInstructorByIdAsync(instructorId);
+                if (instructor == null)
+                {
+                    return BadRequest($"The instructor with id {instructorId} does not exist");
+                }
+                instructorsList.Add(instructor);
+            }
+
+            for (int i = 0; i < instructorsList.Count; i++)
+            {
+                var instructor = instructorsList[i];
+                ArgumentNullException.ThrowIfNull(instructor.Id);
+                await _instructorRepository.DeleteCourseAsync(instructor.Id, id);
+            }
+
+            Console.WriteLine($"Processed request deleting course {id} from students {string.Join(", ", instructorIds)} from {HttpContext.Connection.RemoteIpAddress}");
+
+            return Ok(instructorsList.Select(i => i.Id).ToList());
         }
-
-        for (int i = 0; i < instructorsList.Count; i++)
-        {
-            var instructor = instructorsList[i];
-            await _instructorRepository.DeleteCourseAsync(instructor.Id, id);
-        }
-
-        Console.WriteLine($"Processed request deleting course {id} from students {string.Join(", ", instructorIds)} from {HttpContext.Connection.RemoteIpAddress}");
-
-        return Ok(instructorsList.Select(i => i.Id).ToList());
     }
 
     //DELETE: instructors/{id}
     [HttpDelete("{id}")]
     public async Task<ActionResult> DeleteInstructor(string id)
     {
-        if (string.IsNullOrWhiteSpace(id))
+        ServiceMetrics.IncDeleteInstructorRequests();
+        using (ServiceMetrics.TrackRequestDuration())
         {
-            return BadRequest("Invalid id");
-        }
+            if (string.IsNullOrWhiteSpace(id))
+            {
+                return BadRequest("Invalid id");
+            }
 
-        var instructor = await _instructorRepository.GetInstructorByIdAsync(id);
-        if (instructor == null)
-        {
-            return NotFound("The instructor not foud");
-        }
+            var instructor = await _instructorRepository.GetInstructorByIdAsync(id);
+            if (instructor == null)
+            {
+                return NotFound("The instructor not foud");
+            }
 
-        if (instructor.Courses.Count == 0)
-        {
+            if (instructor.Courses.Count == 0)
+            {
+                await _instructorRepository.DeleteInstructorAsync(id);
+                Console.WriteLine($"Procecced request to delete instructors {id} from {HttpContext.Connection.RemoteIpAddress}");
+
+                return NoContent();
+            }
+
+            var settings = new CommunicationSettings
+            {
+                HttpSettings = new HttpCommunicationSettings
+                {
+                    Method = HttpMethod.Put,
+                    DestinationURL = $"http://courses_manager_service:8080/instructors/{id}",
+                    Message = null
+                },
+                RabbitMqSettings = new RabbitMqCommunicationSettings
+                {
+                    QueueName = "instructor-delete",
+                    Message = id
+                }
+            };
+
+            try
+            {
+                await _communicationStrategy.SendMessage(settings);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode((int)HttpStatusCode.InternalServerError, $"Error occurred: {ex.Message}");
+            }
+
             await _instructorRepository.DeleteInstructorAsync(id);
+
             Console.WriteLine($"Procecced request to delete instructors {id} from {HttpContext.Connection.RemoteIpAddress}");
 
             return NoContent();
         }
-
-        var settings = new CommunicationSettings
-        {
-            HttpSettings = new HttpCommunicationSettings
-            {
-                Method = HttpMethod.Put,
-                DestinationURL = $"http://courses_manager_service:8080/instructors/{id}",
-                Message = null
-            },
-            RabbitMqSettings = new RabbitMqCommunicationSettings
-            {
-                QueueName = "instructor-delete",
-                Message = id
-            }
-        };
-
-        try
-        {
-            await _communicationStrategy.SendMessage(settings);
-        }
-        catch (Exception ex)
-        {
-            return StatusCode((int)HttpStatusCode.InternalServerError, $"Error occurred: {ex.Message}");
-        }
-
-        await _instructorRepository.DeleteInstructorAsync(id);
-
-        Console.WriteLine($"Procecced request to delete instructors {id} from {HttpContext.Connection.RemoteIpAddress}");
-
-        return NoContent();
     }
 }

@@ -1,0 +1,19 @@
+scrape_configs:
+  - job_name: "courses_manager_service"
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["courses_manager_service:8080"]
+
+  - job_name: "students_manager_service"
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["students_manager_service:8080"]
+
+  - job_name: "instructors_manager_service"
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["instructors_manager_service:8080"]
+
+  - job_name: "rabbitmq-prometheus"
+    static_configs:
+      - targets: ["rabbitmq:15692"]

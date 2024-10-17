@@ -109,6 +109,7 @@ public class RabbitMQConsumer : BackgroundService
 
             if (course.Students.Contains(id))
             {
+                ArgumentNullException.ThrowIfNull(course.Id);
                 var res = await repo.RemoveStudentAsync(course.Id, id);
 
                 Console.WriteLine($"Updated course {course.Id} - Success: {res.ModifiedCount > 0}");
@@ -158,6 +159,7 @@ public class RabbitMQConsumer : BackgroundService
 
             if (course.Instructors.Contains(id))
             {
+                ArgumentNullException.ThrowIfNull(course.Id);
                 var res = await repo.RemoveInstructorAsync(course.Id, id);
 
                 Console.WriteLine($"Updated course {course.Id} - Success: {res.ModifiedCount > 0}");

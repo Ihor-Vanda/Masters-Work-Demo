@@ -1,65 +1,38 @@
 using ModifiedCB.Settings;
 
-namespace ModifiedCB
+namespace ModifiedCB;
+
+public class CBCommunication : ICommunicationStrategy
 {
-    public class CBCommunication : ICommunicationStrategy
+    private readonly ICommunicationStrategy _httpStrategy;
+    private readonly ICommunicationStrategy _rabbitMqStrategy;
+
+    public CBCommunication(ICommunicationStrategy httpStrategy, ICommunicationStrategy rabbitMqStrategy)
     {
-        private readonly ICommunicationStrategy _httpStrategy;
-        private readonly ICommunicationStrategy _rabbitMqStrategy;
-        private readonly CircuitBreakerState _state;
-        private readonly TimeSpan _retryDelay;
+        _httpStrategy = httpStrategy;
+        _rabbitMqStrategy = rabbitMqStrategy;
+    }
 
-        public CBCommunication(ICommunicationStrategy httpStrategy,
-                            ICommunicationStrategy rabbitMqStrategy,
-                            TimeSpan retryDelay,
-                            int failureThreshold,
-                            TimeSpan resetTimeout)
+    public async Task<bool> SendMessage(CommunicationSettings settings)
+    {
+        using (LibMetrics.TrackMessageSendDuration())
         {
-            _httpStrategy = httpStrategy;
-            _rabbitMqStrategy = rabbitMqStrategy;
-            _retryDelay = retryDelay;
-            _state = new CircuitBreakerState(failureThreshold, resetTimeout); // Параметри Circuit Breaker передаються сюди
-        }
-
-        public async Task SendMessage(CommunicationSettings settings)
-        {
-            if (_state.IsOpen)
+            var httpRequest = await _httpStrategy.SendMessage(settings);
+            if (httpRequest)
             {
-                // Використовуємо RabbitMQ при відкритому стані Circuit Breaker
-                await _rabbitMqStrategy.SendMessage(settings);
+                return true;
             }
-            else
-            {
-                int attempt = 0;
-                bool success = false;
-                while (attempt < 2 && !success)
-                {
-                    try
-                    {
-                        attempt++;
-                        await _httpStrategy.SendMessage(settings);
-                        success = true;  // Якщо успішно — залишаємо CB закритим або скидаємо стан
-                    }
-                    catch
-                    {
-                        if (attempt < 2)  // Якщо це не остання спроба — чекаємо перед повторенням
-                        {
-                            Console.WriteLine($"HTTP request failed. Retrying in {_retryDelay.TotalSeconds} seconds...");
-                            await Task.Delay(_retryDelay);
-                        }
-                        else
-                        {
-                            Console.WriteLine("HTTP request failed twice. Switching to RabbitMQ.");
-                            _state.IsOpen = true;  // Перемикаємось на RabbitMQ після двох невдалих спроб
-                        }
-                    }
-                }
 
-                if (!success)
-                {
-                    await _rabbitMqStrategy.SendMessage(settings);
-                }
+            LibMetrics.IncRabbitMqFallbacks();
+            var rabbitmqRequest = await _rabbitMqStrategy.SendMessage(settings);
+            if (rabbitmqRequest)
+            {
+                return true;
             }
+
+            Console.WriteLine("Can't send message both ways");
+            LibMetrics.IncFailedMessages();
+            return false;
         }
     }
 }

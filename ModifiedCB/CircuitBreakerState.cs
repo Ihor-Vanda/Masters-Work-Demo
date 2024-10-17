@@ -1,29 +1,39 @@
-public class CircuitBreakerState
-{
-    public bool IsOpen { get; set; }
-    public int FailureCount { get; set; }
-    public int FailureThreshold { get; set; }  // Поріг невдач
-    public TimeSpan ResetTimeout { get; set; }  // Таймаут перезавантаження після помилок
+namespace ModifiedCB;
 
-    // Модифікований конструктор, який приймає параметри ззовні
-    public CircuitBreakerState(int failureThreshold, TimeSpan resetTimeout)
+public class CircuitBreakerWithRetry
+{
+    private readonly int _failureThreshold;
+    private readonly TimeSpan _resetTimeout;
+    public int RetryAttemt { get; private set; }
+    public TimeSpan RetryInterval { get; private set; }
+    private int FailureCount { get; set; } = 0;
+    public bool IsOpen { get; private set; } = false;
+
+    public CircuitBreakerWithRetry(
+        int failureThreshold,
+        TimeSpan resetTimeout,
+        int retryAttempt,
+        TimeSpan retryInterval)
     {
-        IsOpen = false;
-        FailureCount = 0;
-        FailureThreshold = failureThreshold;  // Поріг невдач
-        ResetTimeout = resetTimeout;  // Таймаут перезапуску
+        _failureThreshold = failureThreshold;
+        _resetTimeout = resetTimeout;
+        RetryAttemt = retryAttempt;
+        RetryInterval = retryInterval;
+        LibMetrics.SetCircuitBreakerState(1);
     }
 
     public void RecordFailure()
     {
         FailureCount++;
-        if (FailureCount >= FailureThreshold)
+        if (FailureCount >= _failureThreshold)
         {
             IsOpen = true;
-            Task.Delay(ResetTimeout).ContinueWith(t =>
+            LibMetrics.SetCircuitBreakerState(0);
+            Console.WriteLine($"Circuit Breaker is open for {_resetTimeout} seconds");
+
+            Task.Delay(_resetTimeout).ContinueWith(t =>
             {
-                IsOpen = false;
-                FailureCount = 0;
+                Reset();
             });
         }
     }
@@ -32,5 +42,7 @@ public class CircuitBreakerState
     {
         FailureCount = 0;
         IsOpen = false;
+        LibMetrics.SetCircuitBreakerState(1);
+        Console.WriteLine("Circuit Breaker is reset");
     }
 }

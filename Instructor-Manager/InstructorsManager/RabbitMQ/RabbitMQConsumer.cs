@@ -11,7 +11,7 @@ namespace InstructorsManager.RabbitMQ
         private readonly IServiceProvider _serviceProvider;
         private readonly IConnection _connection;
         private readonly IModel _channel;
-        private readonly SemaphoreSlim _semaphore = new SemaphoreSlim(1, 1); // Семафор для контролю обробки
+        private readonly SemaphoreSlim _semaphore = new(1, 1); // Семафор для контролю обробки
 
 
         public RabbitMQConsumer(IServiceProvider serviceProvider)
@@ -105,7 +105,7 @@ namespace InstructorsManager.RabbitMQ
                 return;
             }
 
-            var list = instructors.FindAll(s => message.EntityIds.Contains(s.Id));
+            var list = instructors.FindAll(s => message.EntityIds != null && message.EntityIds.Any(id => id != null && id == s.Id));
 
             if (list == null || list.Count == 0)
             {
@@ -115,8 +115,10 @@ namespace InstructorsManager.RabbitMQ
 
             foreach (var instructor in list)
             {
+                ArgumentNullException.ThrowIfNull(message.CourseId);
                 if (instructor.Courses.Contains(message.CourseId))
                 {
+                    ArgumentNullException.ThrowIfNull(instructor.Id);
                     var res = await repo.DeleteCourseAsync(instructor.Id, message.CourseId);
                     Console.WriteLine($"Updated instructor {instructor.Id} - Success: {res.ModifiedCount > 0}");
                     Console.WriteLine($"Deleted course {message.CourseId} from instructor {instructor.Id}.");
@@ -141,7 +143,7 @@ namespace InstructorsManager.RabbitMQ
                 return;
             }
 
-            var list = instructors.FindAll(s => message.EntityIds.Contains(s.Id));
+            var list = instructors.FindAll(s => message.EntityIds != null && message.EntityIds.Any(id => id != null && id == s.Id));
 
             if (list == null || list.Count == 0)
             {
@@ -151,8 +153,10 @@ namespace InstructorsManager.RabbitMQ
 
             foreach (var instructor in list)
             {
+                ArgumentNullException.ThrowIfNull(message.CourseId);
                 if (!instructor.Courses.Contains(message.CourseId))
                 {
+                    ArgumentNullException.ThrowIfNull(instructor.Id);
                     var res = await repo.AddCourseAsync(instructor.Id, message.CourseId);
                     Console.WriteLine($"Updated instructor {instructor.Id} - Success: {res.ModifiedCount > 0}");
                     Console.WriteLine($"Add course {message.CourseId} to instructor {instructor.Id}.");

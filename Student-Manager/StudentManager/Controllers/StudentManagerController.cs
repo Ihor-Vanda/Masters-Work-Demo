@@ -110,6 +110,11 @@ public class StudentManagerController : ControllerBase
                 return BadRequest("Invalid request");
             }
 
+            if (!ObjectId.TryParse(id, out var _))
+            {
+                return BadRequest("Invalid id");
+            }
+
             if (string.IsNullOrWhiteSpace(updatedStudent.FirstName) || string.IsNullOrWhiteSpace(updatedStudent.LastName))
             {
                 return BadRequest("Requeired filds are empty");
@@ -151,9 +156,18 @@ public class StudentManagerController : ControllerBase
                 return BadRequest("Invalid request");
             }
 
+            if (!ObjectId.TryParse(id, out var _))
+            {
+                return BadRequest("Invalid id");
+            }
+
             var studentsList = new List<Student>();
             foreach (var studentId in studentIds)
             {
+                if (!ObjectId.TryParse(studentId, out var _))
+                {
+                    return BadRequest("Invalid id");
+                }
                 var student = await _studentRepository.GetStudentByIdAsync(studentId);
                 if (student == null)
                 {
@@ -189,9 +203,18 @@ public class StudentManagerController : ControllerBase
                 return BadRequest("Invalid request");
             }
 
+            if (!ObjectId.TryParse(id, out var _))
+            {
+                return BadRequest("Invalid id");
+            }
+
             var studentsList = new List<Student>();
             foreach (var studentId in studentIds)
             {
+                if (!ObjectId.TryParse(studentId, out var _))
+                {
+                    return BadRequest("Invalid id");
+                }
                 var student = await _studentRepository.GetStudentByIdAsync(studentId);
                 if (student == null)
                 {
@@ -224,6 +247,11 @@ public class StudentManagerController : ControllerBase
         using (ServiceMetrics.TrackRequestDuration())
         {
             if (string.IsNullOrWhiteSpace(id))
+            {
+                return BadRequest("Invalid id");
+            }
+
+            if (!ObjectId.TryParse(id, out var _))
             {
                 return BadRequest("Invalid id");
             }

@@ -110,6 +110,11 @@ public class InstructorManagerController : ControllerBase
                 return BadRequest("Invalid Request");
             }
 
+            if (!ObjectId.TryParse(id, out var _))
+            {
+                return BadRequest("Invalid id");
+            }
+
             if (string.IsNullOrWhiteSpace(instructorDTO.FirstName) || string.IsNullOrWhiteSpace(instructorDTO.LastName) || string.IsNullOrWhiteSpace(instructorDTO.BirthDate))
             {
                 return BadRequest("Reqired field are empty");
@@ -152,9 +157,18 @@ public class InstructorManagerController : ControllerBase
                 return BadRequest("Invalid request");
             }
 
+            if (!ObjectId.TryParse(id, out var _))
+            {
+                return BadRequest("Invalid id");
+            }
+
             var instructorsList = new List<Instructor>();
             foreach (var instructorId in instructorIds)
             {
+                if (!ObjectId.TryParse(instructorId, out var _))
+                {
+                    return BadRequest("Invalid instructor id");
+                }
                 var instructor = await _instructorRepository.GetInstructorByIdAsync(instructorId);
                 if (instructor == null)
                 {
@@ -188,9 +202,18 @@ public class InstructorManagerController : ControllerBase
                 return BadRequest("Invalid request");
             }
 
+            if (!ObjectId.TryParse(id, out var _))
+            {
+                return BadRequest("Invalid id");
+            }
+
             var instructorsList = new List<Instructor>();
             foreach (var instructorId in instructorIds)
             {
+                if (!ObjectId.TryParse(instructorId, out var _))
+                {
+                    return BadRequest("Invalid id");
+                }
                 var instructor = await _instructorRepository.GetInstructorByIdAsync(instructorId);
                 if (instructor == null)
                 {
@@ -220,6 +243,11 @@ public class InstructorManagerController : ControllerBase
         using (ServiceMetrics.TrackRequestDuration())
         {
             if (string.IsNullOrWhiteSpace(id))
+            {
+                return BadRequest("Invalid id");
+            }
+
+            if (!ObjectId.TryParse(id, out var _))
             {
                 return BadRequest("Invalid id");
             }

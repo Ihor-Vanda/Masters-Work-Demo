@@ -48,7 +48,7 @@ public class CoursesManagerController : ControllerBase
         ServiceMetrics.IncGetCourseByIdRequests();
         using (ServiceMetrics.TrackRequestDuration())
         {
-            if (!ObjectId.TryParse(id, out var idValue))
+            if (!ObjectId.TryParse(id, out var _))
             {
                 return BadRequest("Invalid id");
             }
@@ -120,6 +120,11 @@ public class CoursesManagerController : ControllerBase
                 return BadRequest("Invalid request.");
             }
 
+            if (!ObjectId.TryParse(id, out var _))
+            {
+                return BadRequest("Invalid id");
+            }
+
             if (string.IsNullOrWhiteSpace(updatedCourseDTO.Title) || string.IsNullOrWhiteSpace(updatedCourseDTO.CourseCode))
             {
                 return BadRequest("Reqired field are empty");
@@ -170,6 +175,11 @@ public class CoursesManagerController : ControllerBase
                 return BadRequest("Invalid course ID.");
             }
 
+            if (!ObjectId.TryParse(id, out var _))
+            {
+                return BadRequest("Invalid id");
+            }
+
             var course = await _courseRepository.GetCourseByIdAsync(id);
             if (course == null)
             {
@@ -178,7 +188,7 @@ public class CoursesManagerController : ControllerBase
 
             students = students
                 .Distinct()
-                .Where(student => !course.Students.Contains(student))
+                .Where(student => !course.Students.Contains(student) && ObjectId.TryParse(student, out var _))
                 .ToList();
 
             if (students.Count == 0)
@@ -235,21 +245,36 @@ public class CoursesManagerController : ControllerBase
                 return BadRequest("Invalid id");
             }
 
+            if (!ObjectId.TryParse(id, out var _))
+            {
+                return BadRequest("Invalid id");
+            }
+
             var course = await _courseRepository.GetCourseByIdAsync(id);
             if (course == null)
             {
                 return NotFound("The course not found");
             }
 
-            students = students
-               .Distinct()
-               .Where(course.Students.Contains)
-               .ToList();
+            // Спочатку виведемо дані для діагностики
+            Console.WriteLine("Initial students: " + string.Join(", ", students));
+            Console.WriteLine("Course students: " + string.Join(", ", course.Students));
 
+            // Фільтрація студентів
+            students = students
+                .Distinct()
+                .Where(student => course.Students.Contains(student) && ObjectId.TryParse(student, out var _))
+                .ToList();
+
+            // Діагностика після фільтрації
+            Console.WriteLine("Filtered students: " + string.Join(", ", students));
+
+            // Якщо після фільтрації немає студентів
             if (students.Count == 0)
             {
-                return BadRequest("The course don't have the students");
+                return BadRequest("The course doesn't have the students");
             }
+
 
             var settings = new CommunicationSettings
             {
@@ -300,6 +325,11 @@ public class CoursesManagerController : ControllerBase
                 return BadRequest("Invalid id");
             }
 
+            if (!ObjectId.TryParse(id, out var _))
+            {
+                return BadRequest("Invalid id");
+            }
+
             var courses = await _courseRepository.GetAllCoursesAsync();
             if (courses == null)
             {
@@ -340,6 +370,11 @@ public class CoursesManagerController : ControllerBase
                 return BadRequest("Invalid course ID.");
             }
 
+            if (!ObjectId.TryParse(id, out var _))
+            {
+                return BadRequest("Invalid  course id");
+            }
+
             var course = await _courseRepository.GetCourseByIdAsync(id);
             if (course == null)
             {
@@ -348,7 +383,7 @@ public class CoursesManagerController : ControllerBase
 
             instructors = instructors
                 .Distinct()
-                .Where(instructor => !course.Instructors.Contains(instructor))
+                .Where(instructor => !course.Instructors.Contains(instructor) && ObjectId.TryParse(instructor, out var _))
                 .ToList();
 
             if (instructors.Count == 0)
@@ -405,6 +440,11 @@ public class CoursesManagerController : ControllerBase
                 return BadRequest("Invalid course ID.");
             }
 
+            if (!ObjectId.TryParse(id, out var _))
+            {
+                return BadRequest("Invalid id");
+            }
+
             var course = await _courseRepository.GetCourseByIdAsync(id);
             if (course == null)
             {
@@ -413,7 +453,7 @@ public class CoursesManagerController : ControllerBase
 
             instructors = instructors
                .Distinct()
-               .Where(course.Instructors.Contains)
+               .Where(instructor => course.Instructors.Contains(instructor) && ObjectId.TryParse(instructor, out var _))
                .ToList();
 
             if (instructors.Count == 0)
@@ -470,6 +510,11 @@ public class CoursesManagerController : ControllerBase
                 return BadRequest("Invalid id");
             }
 
+            if (!ObjectId.TryParse(id, out var _))
+            {
+                return BadRequest("Invalid id");
+            }
+
             var courses = await _courseRepository.GetAllCoursesAsync();
             if (courses == null)
             {
@@ -510,6 +555,11 @@ public class CoursesManagerController : ControllerBase
                 return BadRequest("Invalid Id.");
             }
 
+            if (!ObjectId.TryParse(id, out var _))
+            {
+                return BadRequest("Invalid id");
+            }
+
             var existingCourse = await _courseRepository.GetCourseByIdAsync(id);
             if (existingCourse == null)
             {
@@ -524,17 +574,19 @@ public class CoursesManagerController : ControllerBase
             if (!studentRequestSuccess)
             {
                 var studentDeletionResult = await DeleteStudentFromCourse(existingCourse.Id, existingCourse.Students);
-                studentRequestSuccess = studentDeletionResult is OkResult;
+                studentRequestSuccess = studentDeletionResult is OkObjectResult;
             }
 
             if (!instructorRequestSuccess)
             {
                 var instructorDeletionResult = await DeleteInstructorsFromCourse(existingCourse.Id, existingCourse.Instructors);
-                instructorRequestSuccess = instructorDeletionResult is OkResult;
+                instructorRequestSuccess = instructorDeletionResult is OkObjectResult;
             }
 
             if (!studentRequestSuccess || !instructorRequestSuccess)
             {
+                Console.WriteLine($"Is students deleted {studentRequestSuccess}");
+                Console.WriteLine($"Is instructors deleted {instructorRequestSuccess}");
                 return StatusCode(503, "Remote services temporarily unavailable.");
             }
 

@@ -95,8 +95,5 @@ public class ServiceMetrics
         DeleteInstructorFromCoursesCounter.Inc();
     }
 
-    public static IDisposable TrackRequestDuration()
-    {
-        return RequestDuration.NewTimer();
-    }
+    public static void TrackRequestDuration(double time) => RequestDuration.Observe(time);
 }

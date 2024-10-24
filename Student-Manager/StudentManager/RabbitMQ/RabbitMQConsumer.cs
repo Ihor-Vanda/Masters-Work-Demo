@@ -47,11 +47,19 @@ namespace StudentManager.RabbitMQ
                     var body = ea.Body.ToArray();
                     var messageJson = Encoding.UTF8.GetString(body);
 
+                    // Перевірка, чи повідомлення є валідним JSON
+                    if (!IsValidJson(messageJson))
+                    {
+                        Console.WriteLine("Invalid JSON message received.");
+                        _channel.BasicAck(ea.DeliveryTag, false);
+                        return;
+                    }
+
                     var message = JsonSerializer.Deserialize<RabbitMQMessage>(messageJson);
 
                     if (message == null || string.IsNullOrEmpty(message.Type) || string.IsNullOrEmpty(message.CourseId) || message.EntityIds == null || message.EntityIds.Count == 0)
                     {
-                        Console.WriteLine("Invalid message received.");
+                        Console.WriteLine("Invalid message structure.");
                         _channel.BasicAck(ea.DeliveryTag, false);
                         return;
                     }
@@ -91,6 +99,20 @@ namespace StudentManager.RabbitMQ
                                  consumer: consumer);
 
             await Task.CompletedTask;
+        }
+
+        // Функція для перевірки валідності JSON
+        private bool IsValidJson(string jsonString)
+        {
+            try
+            {
+                var jsonDoc = JsonDocument.Parse(jsonString);
+                return true;
+            }
+            catch (JsonException)
+            {
+                return false;
+            }
         }
 
         private async Task HandleDeleteCourseRequest(RabbitMQMessage message)

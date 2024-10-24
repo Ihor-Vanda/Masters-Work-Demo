@@ -7,6 +7,9 @@ public static class LibMetrics
     private static readonly Histogram RequestDuration = Metrics
         .CreateHistogram("cb_request_duration_seconds", "Duration of requests sent by the ModifiedCB library in seconds.");
 
+    private static readonly Histogram ProcessSendingMessage = Metrics
+        .CreateHistogram("cb_sending_duration_seconds", "Duration of requests from process to sent by the ModifiedCB library in seconds.");
+
     private static readonly Counter SuccessfulMessages = Metrics
         .CreateCounter("cb_successful_messages_total", "Total number of successfully sent messages.");
 
@@ -28,12 +31,6 @@ public static class LibMetrics
     private static readonly Histogram QueueLatency = Metrics
         .CreateHistogram("cb_rabbitmq_queue_latency_seconds", "Time spent in RabbitMQ queue before being processed.");
 
-
-    public static IDisposable TrackMessageSendDuration()
-    {
-        return RequestDuration.NewTimer();
-    }
-
     public static void IncSuccessfulMessages() => SuccessfulMessages.Inc();
     public static void IncFailedMessages() => FailedMessages.Inc();
     public static void IncRabbitMqFallbacks() => RabbitMqFallbacks.Inc();
@@ -41,4 +38,6 @@ public static class LibMetrics
     public static void SetCircuitBreakerState(int state) => CircuitBreakerState.Set(state);
     public static void IncTimeouts() => Timeouts.Inc();
     public static void ObserveQueueLatency(double latency) => QueueLatency.Observe(latency);
+    public static void RequestDurationTime(double time) => RequestDuration.Observe(time);
+    public static void SendMessageDurationTime(double time) => ProcessSendingMessage.Observe(time);
 }

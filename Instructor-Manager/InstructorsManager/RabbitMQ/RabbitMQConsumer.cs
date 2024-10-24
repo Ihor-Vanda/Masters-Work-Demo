@@ -46,6 +46,14 @@ namespace InstructorsManager.RabbitMQ
                 {
                     var body = ea.Body.ToArray();
                     var messageJson = Encoding.UTF8.GetString(body);
+
+                    if (!IsValidJson(messageJson))
+                    {
+                        Console.WriteLine("Invalid JSON message received.");
+                        _channel.BasicAck(ea.DeliveryTag, false);
+                        return;
+                    }
+
                     var message = JsonSerializer.Deserialize<RabbitMQMessage>(messageJson);
 
                     if (message == null || string.IsNullOrEmpty(message.Type) || string.IsNullOrEmpty(message.CourseId) || message.EntityIds == null || message.EntityIds.Count == 0)
@@ -90,6 +98,19 @@ namespace InstructorsManager.RabbitMQ
                                  consumer: consumer);
 
             await Task.CompletedTask;
+        }
+
+        private bool IsValidJson(string jsonString)
+        {
+            try
+            {
+                var jsonDoc = JsonDocument.Parse(jsonString);
+                return true;
+            }
+            catch (JsonException)
+            {
+                return false;
+            }
         }
 
         private async Task HandleDeleteCourseRequestAsync(RabbitMQMessage message)

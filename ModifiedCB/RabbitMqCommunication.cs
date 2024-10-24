@@ -27,10 +27,10 @@ public class RabbitMqCommunication : ICommunicationStrategy
             var body = Encoding.UTF8.GetBytes(settings.RabbitMqSettings.Message);
 
             var startTime = DateTime.Now;
+            double endTime;
             _channel.BasicPublish(exchange: "", routingKey: settings.RabbitMqSettings.QueueName, basicProperties: null, body: body);
-            var queueLatency = (DateTime.Now - startTime).TotalSeconds;
-
-            LibMetrics.ObserveQueueLatency(queueLatency);
+            endTime = (DateTime.Now - startTime).TotalSeconds;
+            LibMetrics.ObserveQueueLatency(endTime);
 
             LibMetrics.IncSuccessfulMessages();
             await Task.CompletedTask;

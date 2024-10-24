@@ -24,6 +24,8 @@ public class HttpCommunication : ICommunicationStrategy
         }
         else
         {
+            var s_time = DateTime.Now;
+            double e_time;
             int attempt = 0;
             bool success = false;
             while (attempt < _cb.RetryAttemt && !success)
@@ -42,6 +44,9 @@ public class HttpCommunication : ICommunicationStrategy
                         content = new StringContent(settings.HttpSettings.Message, Encoding.UTF8, "application/json");
                     }
 
+                    var startTime = DateTime.Now;
+                    double endTime;
+
                     HttpResponseMessage response = settings.HttpSettings.Method switch
                     {
                         HttpMethod m when m == HttpMethod.Get => await _httpClient.GetAsync(settings.HttpSettings.DestinationURL),
@@ -50,6 +55,11 @@ public class HttpCommunication : ICommunicationStrategy
                         HttpMethod m when m == HttpMethod.Delete => await _httpClient.DeleteAsync(settings.HttpSettings.DestinationURL),
                         _ => throw new NotSupportedException($"Unsupported HTTP method: {settings.HttpSettings.Method}")
                     };
+                    endTime = (DateTime.Now - startTime).TotalSeconds;
+                    LibMetrics.RequestDurationTime(endTime);
+
+                    e_time = (DateTime.Now - s_time).TotalSeconds;
+                    LibMetrics.SendMessageDurationTime(e_time);
 
                     LibMetrics.IncSuccessfulMessages();
                     return true;
@@ -57,6 +67,8 @@ public class HttpCommunication : ICommunicationStrategy
                 catch (ArgumentNullException)
                 {
                     Console.WriteLine($"Failed to send request! Incorect request settings");
+                    e_time = (DateTime.Now - s_time).TotalSeconds;
+                    LibMetrics.SendMessageDurationTime(e_time);
                     return false;
                 }
                 catch
@@ -70,6 +82,8 @@ public class HttpCommunication : ICommunicationStrategy
                     }
                 }
             }
+            e_time = (DateTime.Now - s_time).TotalSeconds;
+            LibMetrics.SendMessageDurationTime(e_time);
             Console.WriteLine($"Failed to send request {_cb.RetryAttemt} times");
             LibMetrics.IncFailedMessages();
             return false;

@@ -6,8 +6,8 @@ namespace ModifiedCB;
 public class HttpCommunication : ICommunicationStrategy
 {
     private readonly HttpClient _httpClient;
-
     private readonly CircuitBreakerWithRetry _cb;
+    private const int RequestTimeoutSeconds = 5;
 
     public HttpCommunication(HttpClient httpClient, CircuitBreakerWithRetry cb)
     {
@@ -26,13 +26,10 @@ public class HttpCommunication : ICommunicationStrategy
         {
             var s_time = DateTime.Now;
             double e_time;
-            int attempt = 0;
-            bool success = false;
-            while (attempt < _cb.RetryAttemt && !success)
+            for (int i = 0; i < _cb.RetryAttemt; i++)
             {
                 try
                 {
-                    attempt++;
                     ArgumentNullException.ThrowIfNull(settings);
                     ArgumentNullException.ThrowIfNull(settings.HttpSettings);
                     ArgumentNullException.ThrowIfNull(settings.HttpSettings.DestinationURL);
@@ -44,29 +41,34 @@ public class HttpCommunication : ICommunicationStrategy
                         content = new StringContent(settings.HttpSettings.Message, Encoding.UTF8, "application/json");
                     }
 
+                    using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(RequestTimeoutSeconds));
                     var startTime = DateTime.Now;
-                    double endTime;
 
                     HttpResponseMessage response = settings.HttpSettings.Method switch
                     {
-                        HttpMethod m when m == HttpMethod.Get => await _httpClient.GetAsync(settings.HttpSettings.DestinationURL),
-                        HttpMethod m when m == HttpMethod.Post => await _httpClient.PostAsync(settings.HttpSettings.DestinationURL, content),
-                        HttpMethod m when m == HttpMethod.Put => await _httpClient.PutAsync(settings.HttpSettings.DestinationURL, content),
-                        HttpMethod m when m == HttpMethod.Delete => await _httpClient.DeleteAsync(settings.HttpSettings.DestinationURL),
+                        HttpMethod m when m == HttpMethod.Get => await _httpClient.GetAsync(settings.HttpSettings.DestinationURL, cts.Token),
+                        HttpMethod m when m == HttpMethod.Post => await _httpClient.PostAsync(settings.HttpSettings.DestinationURL, content, cts.Token),
+                        HttpMethod m when m == HttpMethod.Put => await _httpClient.PutAsync(settings.HttpSettings.DestinationURL, content, cts.Token),
+                        HttpMethod m when m == HttpMethod.Delete => await _httpClient.DeleteAsync(settings.HttpSettings.DestinationURL, cts.Token),
                         _ => throw new NotSupportedException($"Unsupported HTTP method: {settings.HttpSettings.Method}")
                     };
-                    endTime = (DateTime.Now - startTime).TotalSeconds;
-                    LibMetrics.RequestDurationTime(endTime);
 
+                    var endTime = (DateTime.Now - startTime).TotalSeconds;
+                    LibMetrics.RequestDurationTime(endTime);
                     e_time = (DateTime.Now - s_time).TotalSeconds;
                     LibMetrics.SendMessageDurationTime(e_time);
-
                     LibMetrics.IncSuccessfulMessages();
+
                     return true;
+                }
+                catch (OperationCanceledException)
+                {
+                    Console.WriteLine("Request timed out after 5 seconds.");
+                    _cb.RecordFailure();
                 }
                 catch (ArgumentNullException)
                 {
-                    Console.WriteLine($"Failed to send request! Incorect request settings");
+                    Console.WriteLine($"Failed to send request! Incorrect request settings");
                     e_time = (DateTime.Now - s_time).TotalSeconds;
                     LibMetrics.SendMessageDurationTime(e_time);
                     return false;
@@ -74,14 +76,16 @@ public class HttpCommunication : ICommunicationStrategy
                 catch
                 {
                     _cb.RecordFailure();
-                    LibMetrics.IncHttpRetryAttempts();
-                    if (attempt < _cb.RetryAttemt)
-                    {
-                        Console.WriteLine($"HTTP request failed. Retrying in {_cb.RetryInterval.TotalSeconds} seconds...");
-                        await Task.Delay(_cb.RetryInterval);
-                    }
+                }
+
+                LibMetrics.IncHttpRetryAttempts();
+                if (i < _cb.RetryAttemt)
+                {
+                    Console.WriteLine($"HTTP request failed. Retrying in {_cb.RetryInterval.TotalSeconds} seconds...");
+                    await Task.Delay(_cb.RetryInterval);
                 }
             }
+
             e_time = (DateTime.Now - s_time).TotalSeconds;
             LibMetrics.SendMessageDurationTime(e_time);
             Console.WriteLine($"Failed to send request {_cb.RetryAttemt} times");

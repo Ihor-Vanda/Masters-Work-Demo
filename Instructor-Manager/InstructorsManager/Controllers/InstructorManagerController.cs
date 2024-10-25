@@ -184,7 +184,7 @@ public class InstructorManagerController : ControllerBase
                 await _instructorRepository.AddCourseAsync(instructor.Id, id);
             }
 
-            Console.WriteLine($"Processed request adding course {id} to instructors {string.Join(", ", instructorIds)} from {HttpContext.Connection.RemoteIpAddress}");
+            Console.WriteLine($"Processed request adding course {id} to {instructorsList.Count} instructors from {HttpContext.Connection.RemoteIpAddress}");
 
             return Ok(instructorsList.Select(i => i.Id).ToList());
         }
@@ -229,7 +229,7 @@ public class InstructorManagerController : ControllerBase
                 await _instructorRepository.DeleteCourseAsync(instructor.Id, id);
             }
 
-            Console.WriteLine($"Processed request deleting course {id} from students {string.Join(", ", instructorIds)} from {HttpContext.Connection.RemoteIpAddress}");
+            Console.WriteLine($"Processed request deleting course {id} from {instructorsList.Count} instructors from {HttpContext.Connection.RemoteIpAddress}");
 
             return Ok(instructorsList.Select(i => i.Id).ToList());
         }

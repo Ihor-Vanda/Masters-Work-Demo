@@ -15,10 +15,10 @@ public class CircuitBreakerWithRetry
         int retryAttempt,
         TimeSpan retryInterval)
     {
-        _failureThreshold = failureThreshold;
-        _resetTimeout = resetTimeout;
-        RetryAttemt = retryAttempt;
-        RetryInterval = retryInterval;
+        _failureThreshold = failureThreshold > 0 ? failureThreshold : 2;
+        _resetTimeout = resetTimeout > TimeSpan.FromSeconds(0) ? resetTimeout : TimeSpan.FromSeconds(30);
+        RetryAttemt = retryAttempt > 0 ? retryAttempt : 1;
+        RetryInterval = retryInterval > TimeSpan.FromMilliseconds(0) ? RetryInterval : TimeSpan.FromMilliseconds(500);
         LibMetrics.SetCircuitBreakerState(1);
     }
 
@@ -28,6 +28,7 @@ public class CircuitBreakerWithRetry
         if (FailureCount >= _failureThreshold)
         {
             IsOpen = true;
+
             LibMetrics.SetCircuitBreakerState(0);
             Console.WriteLine($"Circuit Breaker is open for {_resetTimeout} seconds");
 

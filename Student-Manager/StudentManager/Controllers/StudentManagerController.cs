@@ -183,10 +183,10 @@ public class StudentManagerController : ControllerBase
                 ArgumentNullException.ThrowIfNull(student.Id);
                 var res = await _studentRepository.AddCourseAsync(student.Id, id);
 
-                Console.WriteLine($"Updated student {student.Id} - Success: {res.ModifiedCount > 0}");
+                // Console.WriteLine($"Updated student {student.Id} - Success: {res.ModifiedCount > 0}");
             }
 
-            Console.WriteLine($"Processed request adding course {id} to students {string.Join(", ", studentIds)} from {HttpContext.Connection.RemoteIpAddress}");
+            Console.WriteLine($"Processed request adding course {id} to {studentsList.Count} students from {HttpContext.Connection.RemoteIpAddress}");
 
             return Ok(studentsList.Select(s => s.Id).ToList());
         }
@@ -230,10 +230,10 @@ public class StudentManagerController : ControllerBase
                 ArgumentNullException.ThrowIfNull(student.Id);
                 var res = await _studentRepository.DeleteCourseAsync(student.Id, id);
 
-                Console.WriteLine($"Updated student {student.Id} - Success: {res.ModifiedCount > 0}");
+                // Console.WriteLine($"Updated student {student.Id} - Success: {res.ModifiedCount > 0}");
             }
 
-            Console.WriteLine($"Processed request deleting course {id} from students {string.Join(", ", studentIds)} from {HttpContext.Connection.RemoteIpAddress}");
+            Console.WriteLine($"Processed request deleting course {id} from {studentsList.Count} students. {HttpContext.Connection.RemoteIpAddress}");
 
             return Ok(studentsList.Select(s => s.Id).ToList());
         }

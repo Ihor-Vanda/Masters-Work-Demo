@@ -17,11 +17,21 @@ builder.Services.AddScoped<IRepository, CourseRepository>();
 var circuitBreakerSettings = builder.Configuration.GetSection("CircuitBreakerSettings").Get<CircuitBreakerSettings>() ?? throw new InvalidOperationException("CircuitBreaker settings are not configured properly.");
 builder.Services.AddSingleton(circuitBreakerSettings);
 
-builder.Services.AddHttpClient<HttpCommunication>();
+builder.Services.AddHttpClient<HttpCommunication>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(3);
+})
+.ConfigurePrimaryHttpMessageHandler(() =>
+{
+    return new SocketsHttpHandler
+    {
+        MaxConnectionsPerServer = 100
+    };
+});
+
 builder.Services.AddTransient<HttpCommunication>(sp =>
 {
     var httpClient = sp.GetRequiredService<HttpClient>();
-
     var circuitBreakerSettings = sp.GetRequiredService<CircuitBreakerSettings>();
 
     var circuitBreaker = new CircuitBreakerWithRetry(

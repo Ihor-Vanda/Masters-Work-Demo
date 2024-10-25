@@ -37,7 +37,7 @@ public class CoursesManagerController : ControllerBase
 
         endTime = (DateTime.Now - startTime).TotalSeconds;
         ServiceMetrics.TrackRequestDuration(endTime);
-        Console.WriteLine($"Procecced request to get all courses from{HttpContext.Connection.RemoteIpAddress}");
+        // Console.WriteLine($"Procecced request to get all courses from{HttpContext.Connection.RemoteIpAddress}");
         return Ok(courses);
     }
 
@@ -66,7 +66,7 @@ public class CoursesManagerController : ControllerBase
 
         endTime = (DateTime.Now - startTime).TotalSeconds;
         ServiceMetrics.TrackRequestDuration(endTime);
-        Console.WriteLine($"Procecced request to get course {id} from{HttpContext.Connection.RemoteIpAddress}");
+        // Console.WriteLine($"Procecced request to get course {id} from{HttpContext.Connection.RemoteIpAddress}");
 
         return Ok(course);
     }
@@ -103,7 +103,7 @@ public class CoursesManagerController : ControllerBase
         await _courseRepository.CreateCourseAsync(course);
         endTime = (DateTime.Now - startTime).TotalSeconds;
         ServiceMetrics.TrackRequestDuration(endTime);
-        Console.WriteLine($"Procecced request to add course from{HttpContext.Connection.RemoteIpAddress}");
+        // Console.WriteLine($"Procecced request to add course from{HttpContext.Connection.RemoteIpAddress}");
 
         return CreatedAtAction(nameof(GetCourseById), new { id = course.Id }, course);
     }
@@ -159,7 +159,7 @@ public class CoursesManagerController : ControllerBase
         endTime = (DateTime.Now - startTime).TotalSeconds;
         ServiceMetrics.TrackRequestDuration(endTime);
 
-        Console.WriteLine($"Procecced request to update course {id} from {HttpContext.Connection.RemoteIpAddress}");
+        // Console.WriteLine($"Procecced request to update course {id} from {HttpContext.Connection.RemoteIpAddress}");
 
         return NoContent();
     }
@@ -209,12 +209,7 @@ public class CoursesManagerController : ControllerBase
             RabbitMqSettings = new RabbitMqCommunicationSettings
             {
                 QueueName = "student-course",
-                Message = JsonSerializer.Serialize(new RabbitMQMessage
-                {
-                    Type = "add",
-                    CourseId = course.Id,
-                    EntityIds = students
-                })
+                Message = $"add;{course.Id};{string.Join(",", students)}"
             }
         };
 
@@ -234,7 +229,7 @@ public class CoursesManagerController : ControllerBase
         endTime = (DateTime.Now - startTime).TotalSeconds;
         ServiceMetrics.TrackRequestDuration(endTime);
 
-        Console.WriteLine($"Processed request to add students to course {id} from {HttpContext.Connection.RemoteIpAddress}");
+        // Console.WriteLine($"Processed request to add students to course {id} from {HttpContext.Connection.RemoteIpAddress}");
 
         return Ok(course);
     }
@@ -248,6 +243,8 @@ public class CoursesManagerController : ControllerBase
         double endTime;
         if (string.IsNullOrWhiteSpace(id) || !ObjectId.TryParse(id, out var _))
         {
+            endTime = (DateTime.Now - startTime).TotalSeconds;
+            ServiceMetrics.TrackRequestDuration(endTime);
             return BadRequest("Invalid id");
         }
 
@@ -282,12 +279,7 @@ public class CoursesManagerController : ControllerBase
             RabbitMqSettings = new RabbitMqCommunicationSettings
             {
                 QueueName = "student-course",
-                Message = JsonSerializer.Serialize(new RabbitMQMessage
-                {
-                    Type = "delete",
-                    CourseId = course.Id,
-                    EntityIds = students
-                })
+                Message = $"delete;{course.Id};{string.Join(",", students)}"
             }
         };
 
@@ -307,7 +299,7 @@ public class CoursesManagerController : ControllerBase
         endTime = (DateTime.Now - startTime).TotalSeconds;
         ServiceMetrics.TrackRequestDuration(endTime);
 
-        Console.WriteLine($"Procecced request to delete students from course {id} from {HttpContext.Connection.RemoteIpAddress}");
+        // Console.WriteLine($"Procecced request to delete students from course {id} from {HttpContext.Connection.RemoteIpAddress}");
 
         return Ok(course);
     }
@@ -404,12 +396,7 @@ public class CoursesManagerController : ControllerBase
             RabbitMqSettings = new RabbitMqCommunicationSettings
             {
                 QueueName = "instructor-course",
-                Message = JsonSerializer.Serialize(new RabbitMQMessage
-                {
-                    Type = "add",
-                    CourseId = course.Id,
-                    EntityIds = instructors
-                })
+                Message = $"add;{course.Id};{string.Join(",", instructors)}"
             }
         };
 
@@ -429,7 +416,7 @@ public class CoursesManagerController : ControllerBase
         endTime = (DateTime.Now - startTime).TotalSeconds;
         ServiceMetrics.TrackRequestDuration(endTime);
 
-        Console.WriteLine($"Procecced request to add instructors to course {id} from {HttpContext.Connection.RemoteIpAddress}");
+        // Console.WriteLine($"Procecced request to add instructors to course {id} from {HttpContext.Connection.RemoteIpAddress}");
 
         return Ok(course);
     }
@@ -478,12 +465,7 @@ public class CoursesManagerController : ControllerBase
             RabbitMqSettings = new RabbitMqCommunicationSettings
             {
                 QueueName = "instructor-course",
-                Message = JsonSerializer.Serialize(new RabbitMQMessage
-                {
-                    Type = "delete",
-                    CourseId = course.Id,
-                    EntityIds = instructors
-                })
+                Message = $"delete;{course.Id};{string.Join(",", instructors)}"
             }
         };
 
@@ -503,7 +485,7 @@ public class CoursesManagerController : ControllerBase
         endTime = (DateTime.Now - startTime).TotalSeconds;
         ServiceMetrics.TrackRequestDuration(endTime);
 
-        Console.WriteLine($"Procecced request to delete instructors from course {id} from {HttpContext.Connection.RemoteIpAddress}");
+        // Console.WriteLine($"Procecced request to delete instructors from course {id} from {HttpContext.Connection.RemoteIpAddress}");
 
         return Ok(course);
     }
@@ -603,7 +585,7 @@ public class CoursesManagerController : ControllerBase
         await _courseRepository.DeleteCourseAsync(id);
         endTime = (DateTime.Now - startTime).TotalSeconds;
         ServiceMetrics.TrackRequestDuration(endTime);
-        Console.WriteLine($"Processed request to delete course {id} from {HttpContext.Connection.RemoteIpAddress}");
+        // Console.WriteLine($"Processed request to delete course {id} from {HttpContext.Connection.RemoteIpAddress}");
 
         return NoContent();
     }

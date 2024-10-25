@@ -112,14 +112,16 @@ public class RabbitMQConsumer : BackgroundService
                 ArgumentNullException.ThrowIfNull(course.Id);
                 var res = await repo.RemoveStudentAsync(course.Id, id);
 
-                Console.WriteLine($"Updated course {course.Id} - Success: {res.ModifiedCount > 0}");
-                Console.WriteLine($"Deleted student {id} from course {course.Id}.");
+                // Console.WriteLine($"Updated course {course.Id} - Success: {res.ModifiedCount > 0}");
+                // Console.WriteLine($"Deleted student {id} from course {course.Id}.");
             }
             else
             {
-                Console.WriteLine($"The course {course.Id} does not have student {id}.");
+                // Console.WriteLine($"The course {course.Id} does not have student {id}.");
             }
         }
+        Console.WriteLine($"Processed {list.Count} students");
+
     }
 
     private async Task HandleDeleteInstructor(string id)
@@ -162,14 +164,15 @@ public class RabbitMQConsumer : BackgroundService
                 ArgumentNullException.ThrowIfNull(course.Id);
                 var res = await repo.RemoveInstructorAsync(course.Id, id);
 
-                Console.WriteLine($"Updated course {course.Id} - Success: {res.ModifiedCount > 0}");
-                Console.WriteLine($"Deleted instructor {id} from course {course.Id}.");
+                // Console.WriteLine($"Updated course {course.Id} - Success: {res.ModifiedCount > 0}");
+                // Console.WriteLine($"Deleted instructor {id} from course {course.Id}.");
             }
             else
             {
-                Console.WriteLine($"The course {course.Id} does not have instructor {id}.");
+                // Console.WriteLine($"The course {course.Id} does not have instructor {id}.");
             }
         }
+        Console.WriteLine($"Processed {list.Count} students");
     }
 
     public override void Dispose()

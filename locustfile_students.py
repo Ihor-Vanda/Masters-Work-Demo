@@ -7,25 +7,30 @@ from faker import Faker
 fake = Faker()
 students = []
 students_lock = threading.Lock()
+data_initialized = False
 
 class StudentManagerUser(HttpUser):
     wait_time = constant_pacing(1)
 
     def on_start(self):
-        global students
-        self.init_students()
+        global students, data_initialized
+        with students_lock:
+            if not data_initialized:
+                self.init_students()
+                data_initialized = True
 
     def init_students(self):
-        response = self.client.get("http://localhost:5002/students")
-        if response.status_code == 200:
-            response_data = response.json()
-            students = [
-                student["id"]
-                for student in response_data
-            ]
-            print("Student IDs initialized:", len(students))
-        else:
-            print("Failed to fetch students. Status code:", response.status_code)
+        if not students:
+            response = self.client.get("http://localhost:5002/students")
+            if response.status_code == 200:
+                response_data = response.json()
+                students = [
+                    student["id"]
+                    for student in response_data
+                ]
+                print("Student IDs initialized:", len(students))
+            else:
+                print("Failed to fetch students. Status code:", response.status_code)
 
     def get_random_student(self):
         if students:

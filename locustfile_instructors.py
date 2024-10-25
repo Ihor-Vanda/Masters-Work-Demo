@@ -7,26 +7,30 @@ from faker import Faker
 fake = Faker()
 instructors = []
 instructors_lock = threading.Lock()
-
+data_initialized = False
 
 class InstructorManagerUser(HttpUser):
     wait_time = constant_pacing(1)
 
     def on_start(self):
-        global instructors
-        self.init_instructors()
+        global instructors, data_initialized
+        with instructors_lock:
+            if not data_initialized:
+                self.init_instructors()
+                data_initialized = True
             
     def init_instructors(self):
-        response = self.client.get("http://localhost:5003/instructors")
-        if response.status_code == 200:
-            response_data = response.json()
-            instructors = [
-                instructor["id"]
-                for instructor in response_data
-            ]
-            print("Instructor IDs initialized:", len(instructors))
-        else:
-            print("Failed to fetch instructors. Status code:", response.status_code)
+        if not instructors:
+            response = self.client.get("http://localhost:5003/instructors")
+            if response.status_code == 200:
+                response_data = response.json()
+                instructors = [
+                    instructor["id"]
+                    for instructor in response_data
+                ]
+                print("Instructor IDs initialized:", len(instructors))
+            else:
+                print("Failed to fetch instructors. Status code:", response.status_code)
             
     def get_random_instructor(self):
         if instructors:

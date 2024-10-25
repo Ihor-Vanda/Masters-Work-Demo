@@ -4,7 +4,7 @@ using RabbitMQ.Client;
 
 namespace ModifiedCB;
 
-public class RabbitMqCommunication : ICommunicationStrategy
+public class RabbitMqCommunication : ICommunicationStrategy, IDisposable
 {
     private readonly IConnection _connection;
     private readonly IModel _channel;
@@ -42,4 +42,12 @@ public class RabbitMqCommunication : ICommunicationStrategy
             return false;
         }
     }
+
+    public void Dispose()
+    {
+        _channel?.Dispose();
+        _connection?.Dispose();
+    }
+
 }
+

@@ -1,7 +1,9 @@
+using System.Net;
 using InstructorsManager.RabbitMQ;
 using InstructorsManager.Repository;
 using InstructorsManager.Settings;
 using ModifiedCB;
+using ModifiedCB.CircuitBreaker;
 using ModifiedCB.Settings;
 using Polly;
 using Polly.Extensions.Http;
@@ -26,16 +28,19 @@ builder.Services.AddHttpClient<HttpCommunication>();
 builder.Services.AddTransient<HttpCommunication>(sp =>
 {
     var httpClient = sp.GetRequiredService<HttpClient>();
-
     var circuitBreakerSettings = sp.GetRequiredService<CircuitBreakerSettings>();
 
-    var circuitBreaker = new CircuitBreakerWithRetry(
-        circuitBreakerSettings.FailureThreshold,
-        TimeSpan.FromSeconds(circuitBreakerSettings.ResetTimeoutSeconds),
-        circuitBreakerSettings.RetryAttempts,
-        TimeSpan.FromMilliseconds(circuitBreakerSettings.RetryDelayMilliseconds));
+    var retryAttemp = circuitBreakerSettings.RetryAttempts;
+    var retryTimeout = circuitBreakerSettings.RetryDelayMilliseconds;
 
-    return new HttpCommunication(httpClient, circuitBreaker);
+    var circuitBreaker = new CircuitBreakerWithCallBack(
+        circuitBreakerSettings.FailureThreshold,
+        TimeSpan.FromSeconds(circuitBreakerSettings.ResetTimeoutSeconds));
+
+    circuitBreaker.AddErrorCallback(HttpStatusCode.BadRequest, () => Console.WriteLine("Get Bad request from target service"));
+    circuitBreaker.AddErrorCallback(HttpStatusCode.NotFound, () => Console.WriteLine("Get Not found from target service"));
+
+    return new HttpCommunication(httpClient, circuitBreaker, retryAttemp, TimeSpan.FromMilliseconds(retryTimeout));
 });
 
 builder.Services.AddHostedService<RabbitMQConsumer>();

@@ -29,14 +29,14 @@ public class StudentManagerController : ControllerBase
     public async Task<ActionResult<IEnumerable<Student>>> GetStudents()
     {
         ServiceMetrics.IncGetStudentsRequests();
-        using (ServiceMetrics.TrackRequestDuration())
-        {
-            var students = await _studentRepository.GetAllStudents();
+        var start_time = DateTime.Now;
+        double end_time;
+        var students = await _studentRepository.GetAllStudents();
 
-            Console.WriteLine($"Procecced request to get all students from {HttpContext.Connection.RemoteIpAddress}");
+        end_time = (DateTime.Now - start_time).TotalSeconds;
+        ServiceMetrics.TrackRequestDuration(end_time, "GET");
 
-            return Ok(students);
-        }
+        return Ok(students);
     }
 
     //GET: students/{id}
@@ -44,58 +44,58 @@ public class StudentManagerController : ControllerBase
     public async Task<ActionResult<Student>> GetStudentById(string id)
     {
         ServiceMetrics.IncGetStudentByIdRequests();
-        using (ServiceMetrics.TrackRequestDuration())
+
+        if (!ObjectId.TryParse(id, out _)) return BadRequest("Invalid id");
+
+        var start_time = DateTime.Now;
+        double end_time;
+
+        var student = await _studentRepository.GetStudentByIdAsync(id);
+
+        if (student == null)
         {
-            if (!ObjectId.TryParse(id, out _))
-            {
-                return BadRequest("Invalid id");
-            }
-
-            var student = await _studentRepository.GetStudentByIdAsync(id);
-
-            if (student == null)
-            {
-                return NotFound("Student not found");
-            }
-
-            Console.WriteLine($"Procecced request to get stuent {id} from {HttpContext.Connection.RemoteIpAddress}");
-
-            return Ok(student);
+            end_time = (DateTime.Now - start_time).TotalSeconds;
+            ServiceMetrics.TrackRequestDuration(end_time, "GET/id");
+            return NotFound("Student not found");
         }
+
+        end_time = (DateTime.Now - start_time).TotalSeconds;
+        ServiceMetrics.TrackRequestDuration(end_time, "GET/id");
+
+        return Ok(student);
     }
+
 
     //POST: students
     [HttpPost]
     public async Task<ActionResult> AddStudent([FromBody] StudentDTO studentDTO)
     {
         ServiceMetrics.IncCreateStudentRequests();
-        using (ServiceMetrics.TrackRequestDuration())
+
+        if (studentDTO == null) return BadRequest("Student can't be null");
+
+        if (!DateTime.TryParseExact(studentDTO.BirthDate, "yyyy-MM-dd", null, System.Globalization.DateTimeStyles.None, out DateTime birthDate))
         {
-            if (studentDTO == null)
-            {
-                return BadRequest("Student can't be null");
-            }
-
-            if (!DateTime.TryParseExact(studentDTO.BirthDate, "yyyy-MM-dd", null, System.Globalization.DateTimeStyles.None, out DateTime birthDate))
-            {
-                return BadRequest("Date format is incorrect. Expected format: yyyy-MM-dd");
-            }
-
-            var student = new Student
-            {
-                FirstName = studentDTO.FirstName,
-                LastName = studentDTO.LastName,
-                BirthDate = birthDate,
-                PhoneNumber = studentDTO.PhoneNumber,
-                Email = studentDTO.Email
-            };
-
-            await _studentRepository.AddStudentAsync(student);
-
-            Console.WriteLine($"Procecced request to add student from {HttpContext.Connection.RemoteIpAddress}");
-
-            return CreatedAtAction(nameof(GetStudentById), new { id = student.Id }, student);
+            return BadRequest("Date format is incorrect. Expected format: yyyy-MM-dd");
         }
+
+        var start_time = DateTime.Now;
+        double end_time;
+        var student = new Student
+        {
+            FirstName = studentDTO.FirstName,
+            LastName = studentDTO.LastName,
+            BirthDate = birthDate,
+            PhoneNumber = studentDTO.PhoneNumber,
+            Email = studentDTO.Email
+        };
+
+        await _studentRepository.AddStudentAsync(student);
+
+        end_time = (DateTime.Now - start_time).TotalSeconds;
+        ServiceMetrics.TrackRequestDuration(end_time, "POST/id");
+
+        return CreatedAtAction(nameof(GetStudentById), new { id = student.Id }, student);
     }
 
     //PUT: students/{id}
@@ -103,140 +103,183 @@ public class StudentManagerController : ControllerBase
     public async Task<ActionResult> UpdateStudent(string id, [FromBody] StudentDTO updatedStudent)
     {
         ServiceMetrics.IncUpdateStudentRequests();
-        using (ServiceMetrics.TrackRequestDuration())
+
+        if (string.IsNullOrWhiteSpace(id) || updatedStudent == null) return BadRequest("Invalid request");
+        if (!ObjectId.TryParse(id, out var _)) return BadRequest("Invalid id");
+
+        if (string.IsNullOrWhiteSpace(updatedStudent.FirstName) || string.IsNullOrWhiteSpace(updatedStudent.LastName))
         {
-            if (string.IsNullOrWhiteSpace(id) || updatedStudent == null)
-            {
-                return BadRequest("Invalid request");
-            }
-
-            if (!ObjectId.TryParse(id, out var _))
-            {
-                return BadRequest("Invalid id");
-            }
-
-            if (string.IsNullOrWhiteSpace(updatedStudent.FirstName) || string.IsNullOrWhiteSpace(updatedStudent.LastName))
-            {
-                return BadRequest("Requeired filds are empty");
-            }
-
-            var student = await _studentRepository.GetStudentByIdAsync(id);
-            if (student == null)
-            {
-                return NotFound("The student doesn't found");
-            }
-
-            if (!DateTime.TryParseExact(updatedStudent.BirthDate, "yyyy-MM-dd", null, System.Globalization.DateTimeStyles.None, out DateTime birthDate))
-            {
-                return BadRequest("Date format is invalid. Expected format: yyyy-MM-dd");
-            }
-
-            student.FirstName = updatedStudent.FirstName;
-            student.LastName = updatedStudent.LastName;
-            student.BirthDate = birthDate;
-            student.PhoneNumber = updatedStudent.PhoneNumber;
-            student.Email = updatedStudent.Email;
-
-            await _studentRepository.UpdateStudentAsync(id, student);
-
-            Console.WriteLine($"Procecced request to update stuent {id} from {HttpContext.Connection.RemoteIpAddress}");
-
-            return NoContent();
+            return BadRequest("Requeired filds are empty");
         }
+
+        if (!DateTime.TryParseExact(updatedStudent.BirthDate, "yyyy-MM-dd", null, System.Globalization.DateTimeStyles.None, out DateTime birthDate))
+        {
+            return BadRequest("Date format is invalid. Expected format: yyyy-MM-dd");
+        }
+
+        var start_time = DateTime.Now;
+        double end_time;
+
+        var student = await _studentRepository.GetStudentByIdAsync(id);
+        if (student == null)
+        {
+            end_time = (DateTime.Now - start_time).TotalSeconds;
+            ServiceMetrics.TrackRequestDuration(end_time, "PUT/id");
+            return NotFound("The student doesn't found");
+        }
+
+        student.FirstName = updatedStudent.FirstName;
+        student.LastName = updatedStudent.LastName;
+        student.BirthDate = birthDate;
+        student.PhoneNumber = updatedStudent.PhoneNumber;
+        student.Email = updatedStudent.Email;
+
+        await _studentRepository.UpdateStudentAsync(id, student);
+
+        end_time = (DateTime.Now - start_time).TotalSeconds;
+        ServiceMetrics.TrackRequestDuration(end_time, "PUT/id");
+
+        return NoContent();
     }
 
     [HttpPut("courses/{id}/add")]
     public async Task<ActionResult> AddCourseToStudents(string id, [FromBody] List<string> studentIds)
     {
         ServiceMetrics.IncAddCourseToStudentsRequests();
-        using (ServiceMetrics.TrackRequestDuration())
+
+        if (string.IsNullOrWhiteSpace(id) || !ObjectId.TryParse(id, out var _)) return BadRequest("Invalid course id");
+
+        var start_time = DateTime.Now;
+        double end_time;
+
+        var validStudentIds = studentIds
+            .Where(studentId => ObjectId.TryParse(studentId, out _))
+            .ToList();
+
+        if (validStudentIds.Count != studentIds.Count)
         {
-            if (string.IsNullOrWhiteSpace(id) || studentIds == null || studentIds.Count == 0)
-            {
-                return BadRequest("Invalid request");
-            }
-
-            if (!ObjectId.TryParse(id, out var _))
-            {
-                return BadRequest("Invalid id");
-            }
-
-            var studentsList = new List<Student>();
-            foreach (var studentId in studentIds)
-            {
-                if (!ObjectId.TryParse(studentId, out var _))
-                {
-                    return BadRequest("Invalid id");
-                }
-                var student = await _studentRepository.GetStudentByIdAsync(studentId);
-                if (student == null)
-                {
-                    return BadRequest($"Student with id {studentId} does not exist.");
-                }
-                studentsList.Add(student);
-            }
-
-            for (int i = 0; i < studentsList.Count; i++)
-            {
-                var student = studentsList[i];
-
-                ArgumentNullException.ThrowIfNull(student.Id);
-                var res = await _studentRepository.AddCourseAsync(student.Id, id);
-
-                // Console.WriteLine($"Updated student {student.Id} - Success: {res.ModifiedCount > 0}");
-            }
-
-            Console.WriteLine($"Processed request adding course {id} to {studentsList.Count} students from {HttpContext.Connection.RemoteIpAddress}");
-
-            return Ok(studentsList.Select(s => s.Id).ToList());
+            end_time = (DateTime.Now - start_time).TotalSeconds;
+            ServiceMetrics.TrackRequestDuration(end_time, "PUT/courses/id/add");
+            return BadRequest("One or more student IDs are invalid");
         }
+
+        var studentTasks = validStudentIds.Select(_studentRepository.GetStudentByIdAsync);
+        var studentsList = (await Task.WhenAll(studentTasks))
+            .Where(student => student != null)
+            .ToList();
+
+        if (studentsList.Count == 0)
+        {
+            end_time = (DateTime.Now - start_time).TotalSeconds;
+            ServiceMetrics.TrackRequestDuration(end_time, "PUT/courses/id/add");
+            return BadRequest("No valid students found");
+        }
+
+        var addCourseTasks = studentsList.Select(student =>
+            _studentRepository.AddCourseAsync(student.Id, id));
+
+        await Task.WhenAll(addCourseTasks);
+
+        // var studentsList = new List<Student>();
+        // foreach (var studentId in studentIds)
+        // {
+        //     if (!ObjectId.TryParse(studentId, out var _))
+        //     {
+        //         end_time = (DateTime.Now - start_time).TotalSeconds;
+        //         ServiceMetrics.TrackRequestDuration(end_time, "PUT/courses/id/add");
+        //         return BadRequest("Invalid id");
+        //     }
+        //     var student = await _studentRepository.GetStudentByIdAsync(studentId);
+        //     if (student == null)
+        //     {
+        //         end_time = (DateTime.Now - start_time).TotalSeconds;
+        //         ServiceMetrics.TrackRequestDuration(end_time, "PUT/courses/id/add");
+        //         return BadRequest($"Student with id {studentId} does not exist.");
+        //     }
+        //     studentsList.Add(student);
+        // }
+
+        // for (int i = 0; i < studentsList.Count; i++)
+        // {
+        //     var student = studentsList[i];
+        //     ArgumentNullException.ThrowIfNull(student.Id);
+        //     var res = await _studentRepository.AddCourseAsync(student.Id, id);
+        // }
+
+        end_time = (DateTime.Now - start_time).TotalSeconds;
+        ServiceMetrics.TrackRequestDuration(end_time, "PUT/courses/id/add");
+        return Ok(studentsList.Select(s => s.Id).ToList());
     }
+
 
     [HttpPut("courses/{id}/delete")]
     public async Task<ActionResult> DeleteCourseFromStudent(string id, [FromBody] List<string> studentIds)
     {
         ServiceMetrics.IncDeleteCourseFromStudentsRequests();
-        using (ServiceMetrics.TrackRequestDuration())
+
+        if (string.IsNullOrWhiteSpace(id) || !ObjectId.TryParse(id, out var _)) return BadRequest("Invalid course id");
+
+        var start_time = DateTime.Now;
+        double end_time;
+
+        var validStudentIds = studentIds
+            .Where(studentId => ObjectId.TryParse(studentId, out _))
+            .ToList();
+
+        if (validStudentIds.Count != studentIds.Count)
         {
-            if (string.IsNullOrWhiteSpace(id) || studentIds == null || studentIds.Count == 0)
-            {
-                return BadRequest("Invalid request");
-            }
-
-            if (!ObjectId.TryParse(id, out var _))
-            {
-                return BadRequest("Invalid id");
-            }
-
-            var studentsList = new List<Student>();
-            foreach (var studentId in studentIds)
-            {
-                if (!ObjectId.TryParse(studentId, out var _))
-                {
-                    return BadRequest("Invalid id");
-                }
-                var student = await _studentRepository.GetStudentByIdAsync(studentId);
-                if (student == null)
-                {
-                    return BadRequest($"Student with id {studentId} does not exist.");
-                }
-                studentsList.Add(student);
-            }
-
-            for (int i = 0; i < studentsList.Count; i++)
-            {
-                var student = studentsList[i];
-
-                ArgumentNullException.ThrowIfNull(student.Id);
-                var res = await _studentRepository.DeleteCourseAsync(student.Id, id);
-
-                // Console.WriteLine($"Updated student {student.Id} - Success: {res.ModifiedCount > 0}");
-            }
-
-            Console.WriteLine($"Processed request deleting course {id} from {studentsList.Count} students. {HttpContext.Connection.RemoteIpAddress}");
-
-            return Ok(studentsList.Select(s => s.Id).ToList());
+            end_time = (DateTime.Now - start_time).TotalSeconds;
+            ServiceMetrics.TrackRequestDuration(end_time, "courses/id/delete");
+            return BadRequest("One or more student IDs are invalid");
         }
+
+        var studentTasks = validStudentIds.Select(_studentRepository.GetStudentByIdAsync);
+        var studentsList = (await Task.WhenAll(studentTasks))
+            .Where(student => student != null)
+            .ToList();
+
+        if (studentsList.Count == 0)
+        {
+            end_time = (DateTime.Now - start_time).TotalSeconds;
+            ServiceMetrics.TrackRequestDuration(end_time, "PUT/courses/id/delete");
+            return BadRequest("No valid students found");
+        }
+
+        var addCourseTasks = studentsList.Select(student =>
+            _studentRepository.DeleteCourseAsync(student.Id, id));
+
+        await Task.WhenAll(addCourseTasks);
+
+        // var studentsList = new List<Student>();
+        // foreach (var studentId in studentIds)
+        // {
+        //     if (!ObjectId.TryParse(studentId, out var _))
+        //     {
+        //         end_time = (DateTime.Now - start_time).TotalSeconds;
+        //         ServiceMetrics.TrackRequestDuration(end_time, "PUT/courses/id/delete");
+        //         return BadRequest("Invalid id");
+        //     }
+        //     var student = await _studentRepository.GetStudentByIdAsync(studentId);
+        //     if (student == null)
+        //     {
+        //         end_time = (DateTime.Now - start_time).TotalSeconds;
+        //         ServiceMetrics.TrackRequestDuration(end_time, "PUT/courses/id/delete");
+        //         return BadRequest($"Student with id {studentId} does not exist.");
+        //     }
+        //     studentsList.Add(student);
+        // }
+
+        // for (int i = 0; i < studentsList.Count; i++)
+        // {
+        //     var student = studentsList[i];
+        //     ArgumentNullException.ThrowIfNull(student.Id);
+        //     var res = await _studentRepository.DeleteCourseAsync(student.Id, id);
+        // }
+
+        end_time = (DateTime.Now - start_time).TotalSeconds;
+        ServiceMetrics.TrackRequestDuration(end_time, "PUT/courses/id/delete");
+
+        return Ok(studentsList.Select(s => s.Id).ToList());
     }
 
     //DELETE: student/{id}
@@ -244,61 +287,61 @@ public class StudentManagerController : ControllerBase
     public async Task<ActionResult> DeleteStudent(string id)
     {
         ServiceMetrics.IncDeleteStudentRequests();
-        using (ServiceMetrics.TrackRequestDuration())
+
+        if (string.IsNullOrWhiteSpace(id)) return BadRequest("Invalid id");
+        if (!ObjectId.TryParse(id, out var _)) return BadRequest("Invalid id");
+
+        var start_time = DateTime.Now;
+        double end_time;
+
+        var student = await _studentRepository.GetStudentByIdAsync(id);
+        if (student == null)
         {
-            if (string.IsNullOrWhiteSpace(id))
-            {
-                return BadRequest("Invalid id");
-            }
+            end_time = (DateTime.Now - start_time).TotalSeconds;
+            ServiceMetrics.TrackRequestDuration(end_time, "DELETE/id");
+            return NotFound("The student doesn't found");
+        }
 
-            if (!ObjectId.TryParse(id, out var _))
-            {
-                return BadRequest("Invalid id");
-            }
-
-            var student = await _studentRepository.GetStudentByIdAsync(id);
-            if (student == null)
-            {
-                return NotFound("The student doesn't found");
-            }
-
-            if (student.Courses.Count == 0)
-            {
-                await _studentRepository.DeleteStudentAsync(id);
-                Console.WriteLine($"Processed request deleting course {id} from students {string.Join(", ", id)} from {HttpContext.Connection.RemoteIpAddress}");
-
-                return NoContent();
-            }
-
-            var settings = new CommunicationSettings
-            {
-                HttpSettings = new HttpCommunicationSettings
-                {
-                    Method = HttpMethod.Put,
-                    DestinationURL = $"http://courses_manager_service:8080/students/{id}",
-                    Message = null
-                },
-                RabbitMqSettings = new RabbitMqCommunicationSettings
-                {
-                    QueueName = "student-delete",
-                    Message = id
-                }
-            };
-
-            try
-            {
-                await _communicationStrategy.SendMessage(settings);
-            }
-            catch (Exception ex)
-            {
-                return StatusCode((int)HttpStatusCode.InternalServerError, $"Error occurred: {ex.Message}");
-            }
-
+        if (student.Courses.Count == 0)
+        {
             await _studentRepository.DeleteStudentAsync(id);
-
-            Console.WriteLine($"Procecced request to delete student {id} from {HttpContext.Connection.RemoteIpAddress}");
+            end_time = (DateTime.Now - start_time).TotalSeconds;
+            ServiceMetrics.TrackRequestDuration(end_time, "DELETE/id");
 
             return NoContent();
         }
+
+        var settings = new CommunicationSettings
+        {
+            HttpSettings = new HttpCommunicationSettings
+            {
+                Method = HttpMethod.Put,
+                DestinationURL = $"http://courses_manager_service:8080/students/{id}",
+                Message = null
+            },
+            RabbitMqSettings = new RabbitMqCommunicationSettings
+            {
+                QueueName = "student-delete",
+                Message = id
+            }
+        };
+
+        try
+        {
+            await _communicationStrategy.SendMessage(settings);
+        }
+        catch (Exception ex)
+        {
+            end_time = (DateTime.Now - start_time).TotalSeconds;
+            ServiceMetrics.TrackRequestDuration(end_time, "DELETE/id");
+            return StatusCode((int)HttpStatusCode.InternalServerError, $"Error occurred: {ex.Message}");
+        }
+
+        await _studentRepository.DeleteStudentAsync(id);
+
+        end_time = (DateTime.Now - start_time).TotalSeconds;
+        ServiceMetrics.TrackRequestDuration(end_time, "DELETE/id");
+
+        return NoContent();
     }
 }

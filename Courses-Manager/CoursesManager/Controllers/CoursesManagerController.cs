@@ -36,7 +36,7 @@ public class CoursesManagerController : ControllerBase
         var courses = await _courseRepository.GetAllCoursesAsync();
 
         endTime = (DateTime.Now - startTime).TotalSeconds;
-        ServiceMetrics.TrackRequestDuration(endTime);
+        ServiceMetrics.TrackRequestDuration(endTime, "GET");
         // Console.WriteLine($"Procecced request to get all courses from{HttpContext.Connection.RemoteIpAddress}");
         return Ok(courses);
     }
@@ -46,27 +46,23 @@ public class CoursesManagerController : ControllerBase
     public async Task<ActionResult<Course>> GetCourseById(string id)
     {
         ServiceMetrics.IncGetCourseByIdRequests();
+
+        if (!ObjectId.TryParse(id, out var _)) return BadRequest("Invalid id");
+
         var startTime = DateTime.Now;
         double endTime;
-        if (!ObjectId.TryParse(id, out var _))
-        {
-            endTime = (DateTime.Now - startTime).TotalSeconds;
-            ServiceMetrics.TrackRequestDuration(endTime);
-            return BadRequest("Invalid id");
-        }
 
         var course = await _courseRepository.GetCourseByIdAsync(id);
 
         if (course == null)
         {
             endTime = (DateTime.Now - startTime).TotalSeconds;
-            ServiceMetrics.TrackRequestDuration(endTime);
+            ServiceMetrics.TrackRequestDuration(endTime, "GET/id");
             return NotFound("Course not found");
         }
 
         endTime = (DateTime.Now - startTime).TotalSeconds;
-        ServiceMetrics.TrackRequestDuration(endTime);
-        // Console.WriteLine($"Procecced request to get course {id} from{HttpContext.Connection.RemoteIpAddress}");
+        ServiceMetrics.TrackRequestDuration(endTime, "GET/id");
 
         return Ok(course);
     }
@@ -76,17 +72,20 @@ public class CoursesManagerController : ControllerBase
     public async Task<IActionResult> CreateCourse([FromBody] CourseDto courseDto)
     {
         ServiceMetrics.IncCreateCourseRequests();
-        var startTime = DateTime.Now;
-        double endTime;
-        if (
-            courseDto == null ||
-            !DateTime.TryParseExact(courseDto.StartDate, "yyyy-MM-dd", null, System.Globalization.DateTimeStyles.None, out var startDate) ||
-            !DateTime.TryParseExact(courseDto.EndDate, "yyyy-MM-dd", null, System.Globalization.DateTimeStyles.None, out var endDate))
+
+        if (courseDto == null)
         {
-            endTime = (DateTime.Now - startTime).TotalSeconds;
-            ServiceMetrics.TrackRequestDuration(endTime);
             return BadRequest("Invalid request body");
         }
+
+        if (!DateTime.TryParseExact(courseDto.StartDate, "yyyy-MM-dd", null, System.Globalization.DateTimeStyles.None, out var startDate) ||
+            !DateTime.TryParseExact(courseDto.EndDate, "yyyy-MM-dd", null, System.Globalization.DateTimeStyles.None, out var endDate))
+        {
+            return BadRequest("Invalid data format. Expect yyyy-mm-dd format");
+        }
+
+        var startTime = DateTime.Now;
+        double endTime;
 
         var course = new Course
         {
@@ -101,9 +100,9 @@ public class CoursesManagerController : ControllerBase
         };
 
         await _courseRepository.CreateCourseAsync(course);
+
         endTime = (DateTime.Now - startTime).TotalSeconds;
-        ServiceMetrics.TrackRequestDuration(endTime);
-        // Console.WriteLine($"Procecced request to add course from{HttpContext.Connection.RemoteIpAddress}");
+        ServiceMetrics.TrackRequestDuration(endTime, "POST");
 
         return CreatedAtAction(nameof(GetCourseById), new { id = course.Id }, course);
     }
@@ -113,37 +112,29 @@ public class CoursesManagerController : ControllerBase
     public async Task<IActionResult> UpdateCourse(string id, [FromBody] CourseDto updatedCourseDTO)
     {
         ServiceMetrics.IncUpdateCourseRequests();
-        var startTime = DateTime.Now;
-        double endTime;
-        if (string.IsNullOrWhiteSpace(id) || updatedCourseDTO == null || !ObjectId.TryParse(id, out var _))
-        {
-            endTime = (DateTime.Now - startTime).TotalSeconds;
-            ServiceMetrics.TrackRequestDuration(endTime);
-            return BadRequest("Invalid request.");
-        }
 
+        if (string.IsNullOrWhiteSpace(id) || updatedCourseDTO == null || !ObjectId.TryParse(id, out var _)) return BadRequest("Invalid request.");
 
         if (string.IsNullOrWhiteSpace(updatedCourseDTO.Title) || string.IsNullOrWhiteSpace(updatedCourseDTO.CourseCode))
         {
-            endTime = (DateTime.Now - startTime).TotalSeconds;
-            ServiceMetrics.TrackRequestDuration(endTime);
             return BadRequest("Reqired field are empty");
-        }
-
-        var course = await _courseRepository.GetCourseByIdAsync(id);
-        if (course == null)
-        {
-            endTime = (DateTime.Now - startTime).TotalSeconds;
-            ServiceMetrics.TrackRequestDuration(endTime);
-            return NotFound("The course not found");
         }
 
         if (!DateTime.TryParseExact(updatedCourseDTO.StartDate, "yyyy-MM-dd", null, System.Globalization.DateTimeStyles.None, out var startDate) ||
             !DateTime.TryParseExact(updatedCourseDTO.EndDate, "yyyy-MM-dd", null, System.Globalization.DateTimeStyles.None, out var endDate))
         {
-            endTime = (DateTime.Now - startTime).TotalSeconds;
-            ServiceMetrics.TrackRequestDuration(endTime);
             return BadRequest("Date format is incorrect. Expected format: yyyy-MM-dd");
+        }
+
+        var startTime = DateTime.Now;
+        double endTime;
+
+        var course = await _courseRepository.GetCourseByIdAsync(id);
+        if (course == null)
+        {
+            endTime = (DateTime.Now - startTime).TotalSeconds;
+            ServiceMetrics.TrackRequestDuration(endTime, "PUT/id");
+            return NotFound("The course not found");
         }
 
         course.Title = updatedCourseDTO.Title;
@@ -157,9 +148,7 @@ public class CoursesManagerController : ControllerBase
 
         await _courseRepository.UpdateCourseAsync(id, course);
         endTime = (DateTime.Now - startTime).TotalSeconds;
-        ServiceMetrics.TrackRequestDuration(endTime);
-
-        // Console.WriteLine($"Procecced request to update course {id} from {HttpContext.Connection.RemoteIpAddress}");
+        ServiceMetrics.TrackRequestDuration(endTime, "PUT/id");
 
         return NoContent();
     }
@@ -169,20 +158,16 @@ public class CoursesManagerController : ControllerBase
     public async Task<IActionResult> AddStudentsToCourse(string id, [FromBody] List<string> students)
     {
         ServiceMetrics.IncAddStudentToCourseRequests();
+        if (string.IsNullOrWhiteSpace(id) || !ObjectId.TryParse(id, out var _)) return BadRequest("Invalid course ID.");
+
         var startTime = DateTime.Now;
         double endTime;
-        if (string.IsNullOrWhiteSpace(id) || !ObjectId.TryParse(id, out var _))
-        {
-            endTime = (DateTime.Now - startTime).TotalSeconds;
-            ServiceMetrics.TrackRequestDuration(endTime);
-            return BadRequest("Invalid course ID.");
-        }
 
         var course = await _courseRepository.GetCourseByIdAsync(id);
         if (course == null)
         {
             endTime = (DateTime.Now - startTime).TotalSeconds;
-            ServiceMetrics.TrackRequestDuration(endTime);
+            ServiceMetrics.TrackRequestDuration(endTime, "PUT/students/id/add");
             return NotFound("The course not found");
         }
 
@@ -194,7 +179,7 @@ public class CoursesManagerController : ControllerBase
         if (students.Count == 0)
         {
             endTime = (DateTime.Now - startTime).TotalSeconds;
-            ServiceMetrics.TrackRequestDuration(endTime);
+            ServiceMetrics.TrackRequestDuration(endTime, "PUT/students/id/add");
             return BadRequest("The course already have the students");
         }
 
@@ -220,16 +205,14 @@ public class CoursesManagerController : ControllerBase
         catch (Exception ex)
         {
             endTime = (DateTime.Now - startTime).TotalSeconds;
-            ServiceMetrics.TrackRequestDuration(endTime);
+            ServiceMetrics.TrackRequestDuration(endTime, "PUT/students/id/add");
             return StatusCode((int)HttpStatusCode.InternalServerError, $"Error occurred: {ex.Message}");
         }
 
         course.Students.AddRange(students);
         await _courseRepository.UpdateCourseAsync(id, course);
         endTime = (DateTime.Now - startTime).TotalSeconds;
-        ServiceMetrics.TrackRequestDuration(endTime);
-
-        // Console.WriteLine($"Processed request to add students to course {id} from {HttpContext.Connection.RemoteIpAddress}");
+        ServiceMetrics.TrackRequestDuration(endTime, "PUT/students/id/add");
 
         return Ok(course);
     }
@@ -239,20 +222,17 @@ public class CoursesManagerController : ControllerBase
     public async Task<ActionResult> DeleteStudentFromCourse(string id, [FromBody] List<string> students)
     {
         ServiceMetrics.IncDeleteStudentsFromCourseRequests();
+
+        if (string.IsNullOrWhiteSpace(id) || !ObjectId.TryParse(id, out var _)) return BadRequest("Invalid id");
+
         var startTime = DateTime.Now;
         double endTime;
-        if (string.IsNullOrWhiteSpace(id) || !ObjectId.TryParse(id, out var _))
-        {
-            endTime = (DateTime.Now - startTime).TotalSeconds;
-            ServiceMetrics.TrackRequestDuration(endTime);
-            return BadRequest("Invalid id");
-        }
 
         var course = await _courseRepository.GetCourseByIdAsync(id);
         if (course == null)
         {
             endTime = (DateTime.Now - startTime).TotalSeconds;
-            ServiceMetrics.TrackRequestDuration(endTime);
+            ServiceMetrics.TrackRequestDuration(endTime, "PUT/students/id/delete");
             return NotFound("The course not found");
         }
 
@@ -264,7 +244,7 @@ public class CoursesManagerController : ControllerBase
         if (students.Count == 0)
         {
             endTime = (DateTime.Now - startTime).TotalSeconds;
-            ServiceMetrics.TrackRequestDuration(endTime);
+            ServiceMetrics.TrackRequestDuration(endTime, "PUT/students/id/delete");
             return BadRequest("The course doesn't have the students");
         }
 
@@ -290,16 +270,14 @@ public class CoursesManagerController : ControllerBase
         catch (Exception ex)
         {
             endTime = (DateTime.Now - startTime).TotalSeconds;
-            ServiceMetrics.TrackRequestDuration(endTime);
+            ServiceMetrics.TrackRequestDuration(endTime, "PUT/students/id/delete");
             return StatusCode((int)HttpStatusCode.InternalServerError, $"Error occurred: {ex.Message}");
         }
 
         course.Students.RemoveAll(students.Contains);
         await _courseRepository.UpdateCourseAsync(id, course);
         endTime = (DateTime.Now - startTime).TotalSeconds;
-        ServiceMetrics.TrackRequestDuration(endTime);
-
-        // Console.WriteLine($"Procecced request to delete students from course {id} from {HttpContext.Connection.RemoteIpAddress}");
+        ServiceMetrics.TrackRequestDuration(endTime, "PUT/students/id/delete");
 
         return Ok(course);
     }
@@ -309,20 +287,17 @@ public class CoursesManagerController : ControllerBase
     public async Task<ActionResult> DeleteStudentFromAllCourses(string id)
     {
         ServiceMetrics.IncDeleteStudentFromCoursesRequests();
+
+        if (string.IsNullOrWhiteSpace(id) || !ObjectId.TryParse(id, out var _)) return BadRequest("Invalid id");
+
         var startTime = DateTime.Now;
         double endTime;
-        if (string.IsNullOrWhiteSpace(id) || !ObjectId.TryParse(id, out var _))
-        {
-            endTime = (DateTime.Now - startTime).TotalSeconds;
-            ServiceMetrics.TrackRequestDuration(endTime);
-            return BadRequest("Invalid id");
-        }
 
         var courses = await _courseRepository.GetAllCoursesAsync();
         if (courses == null)
         {
             endTime = (DateTime.Now - startTime).TotalSeconds;
-            ServiceMetrics.TrackRequestDuration(endTime);
+            ServiceMetrics.TrackRequestDuration(endTime, "PUT/students/id");
             return NotFound("The course not found");
         }
 
@@ -331,22 +306,19 @@ public class CoursesManagerController : ControllerBase
         if (coursesList == null)
         {
             endTime = (DateTime.Now - startTime).TotalSeconds;
-            ServiceMetrics.TrackRequestDuration(endTime);
+            ServiceMetrics.TrackRequestDuration(endTime, "PUT/students/id");
             return Ok(id);
         }
 
         for (int i = 0; i < coursesList.Count; i++)
         {
             var course = coursesList[i];
-
             ArgumentNullException.ThrowIfNull(course.Id);
             var res = await _courseRepository.RemoveStudentAsync(course.Id, id);
-
-            // Console.WriteLine($"Updated course {course.Id} - Success: {res.ModifiedCount > 0}");
-            // Console.WriteLine($"Deleted student {id} from course {course.Id}");
         }
+
         endTime = (DateTime.Now - startTime).TotalSeconds;
-        ServiceMetrics.TrackRequestDuration(endTime);
+        ServiceMetrics.TrackRequestDuration(endTime, "PUT/students/id");
 
         return Ok(id);
     }
@@ -356,20 +328,17 @@ public class CoursesManagerController : ControllerBase
     public async Task<ActionResult> AddInstructorsToCourse(string id, [FromBody] List<string> instructors)
     {
         ServiceMetrics.IncAddInstructorsToCourseRequests();
+
+        if (string.IsNullOrWhiteSpace(id) || !ObjectId.TryParse(id, out var _)) return BadRequest("Invalid course ID.");
+
         var startTime = DateTime.Now;
         double endTime;
-        if (string.IsNullOrWhiteSpace(id) || !ObjectId.TryParse(id, out var _))
-        {
-            endTime = (DateTime.Now - startTime).TotalSeconds;
-            ServiceMetrics.TrackRequestDuration(endTime);
-            return BadRequest("Invalid course ID.");
-        }
 
         var course = await _courseRepository.GetCourseByIdAsync(id);
         if (course == null)
         {
             endTime = (DateTime.Now - startTime).TotalSeconds;
-            ServiceMetrics.TrackRequestDuration(endTime);
+            ServiceMetrics.TrackRequestDuration(endTime, "PUT/instructors/id/add");
             return NotFound("The course not found");
         }
 
@@ -381,7 +350,7 @@ public class CoursesManagerController : ControllerBase
         if (instructors.Count == 0)
         {
             endTime = (DateTime.Now - startTime).TotalSeconds;
-            ServiceMetrics.TrackRequestDuration(endTime);
+            ServiceMetrics.TrackRequestDuration(endTime, "PUT/instructors/id/add");
             return BadRequest("The course already have the instructors");
         }
 
@@ -407,16 +376,14 @@ public class CoursesManagerController : ControllerBase
         catch (Exception ex)
         {
             endTime = (DateTime.Now - startTime).TotalSeconds;
-            ServiceMetrics.TrackRequestDuration(endTime);
+            ServiceMetrics.TrackRequestDuration(endTime, "PUT/instructors/id/add");
             return StatusCode((int)HttpStatusCode.InternalServerError, $"Error occurred: {ex.Message}");
         }
 
         course.Instructors.AddRange(instructors);
         await _courseRepository.UpdateCourseAsync(id, course);
         endTime = (DateTime.Now - startTime).TotalSeconds;
-        ServiceMetrics.TrackRequestDuration(endTime);
-
-        // Console.WriteLine($"Procecced request to add instructors to course {id} from {HttpContext.Connection.RemoteIpAddress}");
+        ServiceMetrics.TrackRequestDuration(endTime, "PUT/instructors/id/add");
 
         return Ok(course);
     }
@@ -427,18 +394,13 @@ public class CoursesManagerController : ControllerBase
         ServiceMetrics.IncDeleteInstructorsFromCourseRequests();
         var startTime = DateTime.Now;
         double endTime;
-        if (string.IsNullOrWhiteSpace(id) || !ObjectId.TryParse(id, out var _))
-        {
-            endTime = (DateTime.Now - startTime).TotalSeconds;
-            ServiceMetrics.TrackRequestDuration(endTime);
-            return BadRequest("Invalid course ID.");
-        }
+        if (string.IsNullOrWhiteSpace(id) || !ObjectId.TryParse(id, out var _)) return BadRequest("Invalid course ID.");
 
         var course = await _courseRepository.GetCourseByIdAsync(id);
         if (course == null)
         {
             endTime = (DateTime.Now - startTime).TotalSeconds;
-            ServiceMetrics.TrackRequestDuration(endTime);
+            ServiceMetrics.TrackRequestDuration(endTime, "PUT/instructors/id/delete");
             return NotFound("The course not found");
         }
 
@@ -450,7 +412,7 @@ public class CoursesManagerController : ControllerBase
         if (instructors.Count == 0)
         {
             endTime = (DateTime.Now - startTime).TotalSeconds;
-            ServiceMetrics.TrackRequestDuration(endTime);
+            ServiceMetrics.TrackRequestDuration(endTime, "PUT/instructors/id/delete");
             return BadRequest("The course don't have the instructors");
         }
 
@@ -476,16 +438,14 @@ public class CoursesManagerController : ControllerBase
         catch (Exception ex)
         {
             endTime = (DateTime.Now - startTime).TotalSeconds;
-            ServiceMetrics.TrackRequestDuration(endTime);
+            ServiceMetrics.TrackRequestDuration(endTime, "PUT/instructors/id/delete");
             return StatusCode((int)HttpStatusCode.InternalServerError, $"Error occurred: {ex.Message}");
         }
 
         course.Instructors.RemoveAll(instructors.Contains);
         await _courseRepository.UpdateCourseAsync(id, course);
         endTime = (DateTime.Now - startTime).TotalSeconds;
-        ServiceMetrics.TrackRequestDuration(endTime);
-
-        // Console.WriteLine($"Procecced request to delete instructors from course {id} from {HttpContext.Connection.RemoteIpAddress}");
+        ServiceMetrics.TrackRequestDuration(endTime, "PUT/instructors/id/delete");
 
         return Ok(course);
     }
@@ -496,18 +456,13 @@ public class CoursesManagerController : ControllerBase
         ServiceMetrics.IncDeleteInstructorFromCoursesRequests();
         var startTime = DateTime.Now;
         double endTime;
-        if (string.IsNullOrWhiteSpace(id) || !ObjectId.TryParse(id, out var _))
-        {
-            endTime = (DateTime.Now - startTime).TotalSeconds;
-            ServiceMetrics.TrackRequestDuration(endTime);
-            return BadRequest("Invalid id");
-        }
+        if (string.IsNullOrWhiteSpace(id) || !ObjectId.TryParse(id, out var _)) return BadRequest("Invalid id");
 
         var courses = await _courseRepository.GetAllCoursesAsync();
         if (courses == null)
         {
             endTime = (DateTime.Now - startTime).TotalSeconds;
-            ServiceMetrics.TrackRequestDuration(endTime);
+            ServiceMetrics.TrackRequestDuration(endTime, "PUT/instructors/id");
             return NotFound("The course not found");
         }
 
@@ -516,45 +471,39 @@ public class CoursesManagerController : ControllerBase
         if (coursesList == null)
         {
             endTime = (DateTime.Now - startTime).TotalSeconds;
-            ServiceMetrics.TrackRequestDuration(endTime);
+            ServiceMetrics.TrackRequestDuration(endTime, "PUT/instructors/id");
             return Ok(id);
         }
 
         for (int i = 0; i < coursesList.Count; i++)
         {
             var course = coursesList[i];
-
             ArgumentNullException.ThrowIfNull(course.Id);
             var res = await _courseRepository.RemoveInstructorAsync(course.Id, id);
-
-            // Console.WriteLine($"Updated course {course.Id} - Success: {res.ModifiedCount > 0}");
-            // Console.WriteLine($"Deleted instructor {id} from course {course.Id}");
         }
+
         endTime = (DateTime.Now - startTime).TotalSeconds;
-        ServiceMetrics.TrackRequestDuration(endTime);
+        ServiceMetrics.TrackRequestDuration(endTime, "PUT/instructors/id");
 
         return Ok(id);
     }
 
-    // DELETE: api/courses/{id}
+    // DELETE: courses/{id}
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeleteCourse(string id)
     {
         ServiceMetrics.IncDeleteCourseRequests();
+
+        if (string.IsNullOrWhiteSpace(id) || !ObjectId.TryParse(id, out var _)) return BadRequest("Invalid Id.");
+
         var startTime = DateTime.Now;
         double endTime;
-        if (string.IsNullOrWhiteSpace(id) || !ObjectId.TryParse(id, out var _))
-        {
-            endTime = (DateTime.Now - startTime).TotalSeconds;
-            ServiceMetrics.TrackRequestDuration(endTime);
-            return BadRequest("Invalid Id.");
-        }
 
         var existingCourse = await _courseRepository.GetCourseByIdAsync(id);
         if (existingCourse == null)
         {
             endTime = (DateTime.Now - startTime).TotalSeconds;
-            ServiceMetrics.TrackRequestDuration(endTime);
+            ServiceMetrics.TrackRequestDuration(endTime, "DELETE");
             return NotFound("Course not found");
         }
 
@@ -578,14 +527,13 @@ public class CoursesManagerController : ControllerBase
         if (!studentRequestSuccess || !instructorRequestSuccess)
         {
             endTime = (DateTime.Now - startTime).TotalSeconds;
-            ServiceMetrics.TrackRequestDuration(endTime);
+            ServiceMetrics.TrackRequestDuration(endTime, "DELETE");
             return StatusCode(503, "Remote services temporarily unavailable.");
         }
 
         await _courseRepository.DeleteCourseAsync(id);
         endTime = (DateTime.Now - startTime).TotalSeconds;
-        ServiceMetrics.TrackRequestDuration(endTime);
-        // Console.WriteLine($"Processed request to delete course {id} from {HttpContext.Connection.RemoteIpAddress}");
+        ServiceMetrics.TrackRequestDuration(endTime, "DELETE");
 
         return NoContent();
     }

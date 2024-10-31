@@ -14,10 +14,11 @@ class StudentManagerUser(HttpUser):
 
     def on_start(self):
         global students, data_initialized
-        with students_lock:
-            if not data_initialized:
-                self.init_students()
-                data_initialized = True
+        if not data_initialized:
+            with students_lock:
+                if not data_initialized:
+                    self.init_students()
+                    data_initialized = True
 
     def init_students(self):
         if not students:
@@ -89,10 +90,10 @@ class StudentManagerUser(HttpUser):
 
     @task
     def delete_student(self):
-        random_student = self.get_random_student()
-        if random_student:
-            response = self.client.delete(f"/students/{random_student}")
-            print(f"DELETE(students). Status code: {response.status_code} {response.text}")
-            if response.status_code == 204:
-                with students_lock:
+        with students_lock:
+            random_student = self.get_random_student()
+            if random_student:
+                response = self.client.delete(f"/students/{random_student}")
+                print(f"DELETE(students). Status code: {response.status_code} {response.text}")
+                if response.status_code == 204:
                     students.remove(random_student)

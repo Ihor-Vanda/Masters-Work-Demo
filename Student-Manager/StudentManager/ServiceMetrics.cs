@@ -26,7 +26,11 @@ public class ServiceMetrics
         .CreateCounter("delete_course_total", "Total number of deleted course requests from students.");
 
     private static readonly Histogram RequestDuration = Metrics
-           .CreateHistogram("course_request_duration_seconds", "Duration of requests for the student service in seconds.");
+           .CreateHistogram("course_request_duration_seconds", "Duration of requests for the student service in seconds.",
+           new HistogramConfiguration
+           {
+               LabelNames = ["endpoint"]
+           });
 
     public static void IncGetStudentsRequests() => GetStudentsRequestsCounter.Inc();
     public static void IncGetStudentByIdRequests() => GetStudentByIdRequestsCounter.Inc();
@@ -35,10 +39,5 @@ public class ServiceMetrics
     public static void IncDeleteStudentRequests() => DeleteStudentRequestsCounter.Inc();
     public static void IncAddCourseToStudentsRequests() => AddCourseToStudentsCounter.Inc();
     public static void IncDeleteCourseFromStudentsRequests() => DeleteCourseFromStudentsCounter.Inc();
-
-    public static IDisposable TrackRequestDuration()
-    {
-        return RequestDuration.NewTimer();
-    }
-
+    public static void TrackRequestDuration(double time, string label) => RequestDuration.WithLabels(label).Observe(time);
 }

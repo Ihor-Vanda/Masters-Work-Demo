@@ -14,10 +14,11 @@ class InstructorManagerUser(HttpUser):
 
     def on_start(self):
         global instructors, data_initialized
-        with instructors_lock:
-            if not data_initialized:
-                self.init_instructors()
-                data_initialized = True
+        if not data_initialized:
+            with instructors_lock:
+                if not data_initialized:
+                    self.init_instructors()
+                    data_initialized = True
             
     def init_instructors(self):
         if not instructors:
@@ -89,12 +90,12 @@ class InstructorManagerUser(HttpUser):
 
     @task
     def delete_course(self):
-        random_instructor = self.get_random_instructor()
-        
-        response = self.client.delete(f"/instructors/{random_instructor}")
-        print(f"DELETE(instructors). Status code: {response.status_code} {response.text}")
-        if response.status_code != 204: 
-            return
-        
         with instructors_lock:
+            random_instructor = self.get_random_instructor()
+            
+            response = self.client.delete(f"/instructors/{random_instructor}")
+            print(f"DELETE(instructors). Status code: {response.status_code} {response.text}")
+            if response.status_code != 204: 
+                return
+            
             instructors.remove(random_instructor)
